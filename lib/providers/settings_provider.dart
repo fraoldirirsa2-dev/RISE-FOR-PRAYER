@@ -34,7 +34,7 @@ class SettingsProvider extends ChangeNotifier {
   int get reminderOffsetMinutes => _reminderOffsetMinutes;
   int get scheduledReminderCount => _scheduledReminderCount;
   bool get notificationPermissionGranted =>
-      NotificationService.notificationsEnabled == true;
+      NotificationService.isAvailable;
   String? get notificationError => _notificationError;
   bool get onboardingComplete => _onboardingComplete;
   bool get testingNotification => _testingNotification;
@@ -99,7 +99,8 @@ class SettingsProvider extends ChangeNotifier {
     if (!granted) {
       _remindersEnabled = false;
       _scheduledReminderCount = 0;
-      _notificationError = 'Prayer reminders are disabled because notification permission is off.';
+      _notificationError = NotificationService.lastError ??
+          'Prayer reminders are disabled because notification permission is off.';
       await _saveSettings();
       notifyListeners();
       return;
@@ -153,7 +154,8 @@ class SettingsProvider extends ChangeNotifier {
     try {
       final granted = await NotificationService.requestPermission();
       if (!granted) {
-        _notificationError = 'Allow notifications to send a test reminder.';
+        _notificationError = NotificationService.lastError ??
+            'Allow notifications to send a test reminder.';
         return false;
       }
 

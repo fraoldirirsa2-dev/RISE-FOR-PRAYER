@@ -8,8 +8,6 @@ import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
 class NotificationService {
-  static const MethodChannel _androidInfoChannel =
-      MethodChannel('rise_for_prayer/android');
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
   static bool _initialized = false;
@@ -21,6 +19,7 @@ class NotificationService {
   static void Function(int prayerIndex)? onPrayerNotificationTap;
 
   static bool get isAvailable => _available;
+  static bool get isInitialized => _initialized;
   static String? get lastError => _lastError;
   static bool? get notificationsEnabled => _notificationsEnabled;
 
@@ -109,23 +108,25 @@ class NotificationService {
 
   static Future<bool> requestPermission() async {
     await ensureInitialized();
+    if (!_initialized) {
+      _available = false;
+      _lastError ??= 'Notification service failed to initialize.';
+      return false;
+    }
     final androidImplementation = _plugin
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
         >();
     if (androidImplementation != null) {
-      final sdkInt = await _androidSdkInt();
-      if (sdkInt >= 33) {
-        final granted = await androidImplementation.requestNotificationsPermission();
-        if (granted == false) {
-          await refreshPermissionStatus();
-          _lastError = 'Prayer reminders are disabled because notification permission is off.';
-          return false;
-        }
+      // The plugin performs its own API-level checks: this is a runtime
+      // permission on Android 13+, and a no-op on earlier Android versions.
+      final granted = await androidImplementation.requestNotificationsPermission();
+      if (granted == false) {
+        await refreshPermissionStatus();
+        _lastError = 'Prayer reminders are disabled because notification permission is off.';
+        return false;
       }
-      if (sdkInt >= 31) {
-        await androidImplementation.requestExactAlarmsPermission();
-      }
+      await androidImplementation.requestExactAlarmsPermission();
     } else {
       final iosImplementation = _plugin
           .resolvePlatformSpecificImplementation<
@@ -148,18 +149,13 @@ class NotificationService {
     return refreshPermissionStatus();
   }
 
-  static Future<int> _androidSdkInt() async {
-    try {
-      return await _androidInfoChannel.invokeMethod<int>('sdkInt') ?? 0;
-    } on MissingPluginException {
-      return 0;
-    } on PlatformException {
-      return 0;
-    }
-  }
-
   static Future<bool> refreshPermissionStatus() async {
     await ensureInitialized();
+    if (!_initialized) {
+      _available = false;
+      _lastError ??= 'Notification service failed to initialize.';
+      return false;
+    }
     final androidImplementation = _plugin
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
@@ -180,7 +176,7 @@ class NotificationService {
       _notificationsEnabled = true;
     }
     _available = _notificationsEnabled == true;
-    if (_available) _lastError = null;
+    if (_available && _initialized) _lastError = null;
   }
 
   static Future<bool> openNotificationSettings() async {
@@ -224,8 +220,7 @@ class NotificationService {
     int? prayerIndex,
   }) async {
     await ensureInitialized();
-    await refreshPermissionStatus();
-    if (!_initialized || !_available) {
+    if (!_initialized || !await refreshPermissionStatus() || !_available) {
       _lastError ??= 'Notification permission is unavailable.';
       return false;
     }
@@ -314,8 +309,7 @@ class NotificationService {
     required String language,
   }) async {
     await ensureInitialized();
-    await refreshPermissionStatus();
-    if (!_initialized || !_available) {
+    if (!_initialized || !await refreshPermissionStatus() || !_available) {
       _lastError ??= 'Notification permission is unavailable.';
       return false;
     }
