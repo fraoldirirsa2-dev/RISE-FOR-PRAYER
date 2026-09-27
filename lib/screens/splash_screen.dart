@@ -7,7 +7,6 @@ import 'package:rise_for_prayer/providers/app_providers.dart';
 import 'package:rise_for_prayer/services/preferences_store.dart';
 import 'package:rise_for_prayer/utils/colors.dart';
 import 'package:rise_for_prayer/utils/localization.dart';
-import 'package:rise_for_prayer/widgets/eth_cross.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -72,7 +71,30 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        EthCross(size: compact ? 60 : 72),
+                        Container(
+                          width: compact ? 112 : 132,
+                          height: compact ? 112 : 132,
+                          padding: const EdgeInsets.all(18),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF7F6E8),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppColors.gold.withValues(alpha: 0.7),
+                              width: 1.5,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.gold.withValues(alpha: 0.15),
+                                blurRadius: 28,
+                                spreadRadius: 2,
+                              ),
+                            ],
+                          ),
+                          child: Image.asset(
+                            'assets/images/splash.png',
+                            fit: BoxFit.contain,
+                          ),
+                        ),
                         SizedBox(height: compact ? 18 : 24),
                         Text(
                           localizedText(
