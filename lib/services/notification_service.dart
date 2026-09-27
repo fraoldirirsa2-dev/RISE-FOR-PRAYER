@@ -56,7 +56,7 @@ class NotificationService {
     }
 
     const AndroidInitializationSettings androidSettings =
-        AndroidInitializationSettings('@drawable/ic_notification_rise');
+        AndroidInitializationSettings('ic_notification_rise');
     const DarwinInitializationSettings iosSettings =
         DarwinInitializationSettings(
           // Ask only after an explicit user action in Settings. An automatic
