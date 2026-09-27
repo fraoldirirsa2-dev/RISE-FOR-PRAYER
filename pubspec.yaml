@@ -1,0 +1,36 @@
+name: rise_for_prayer
+description: Ethiopian Orthodox Tewahedo daily prayer app
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  flutter_riverpod: ^2.6.1
+  shared_preferences: ^2.5.3
+  intl: ^0.20.2
+  google_fonts: ^8.2.1
+  font_awesome_flutter: ^11.0.0
+  cupertino_icons: ^1.0.8
+  android_intent_plus: ^5.3.0
+  flutter_local_notifications: ^17.2.3
+  timezone: ^0.9.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/sounds/a.mp3
+    - assets/bible/
+  fonts:
+    - family: AbyssinicaSIL
+      fonts:
+        - asset: assets/fonts/AbyssinicaSIL-Regular.ttf

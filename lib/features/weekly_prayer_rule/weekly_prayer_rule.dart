@@ -1,0 +1,1048 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:rise_for_prayer/features/bible/models/bible_models.dart';
+import 'package:rise_for_prayer/features/bible/repositories/bible_repository.dart';
+import 'package:rise_for_prayer/providers/app_providers.dart';
+import 'package:rise_for_prayer/features/prayer_hours/domain/prayer_schedule.dart';
+import 'package:rise_for_prayer/utils/localization.dart';
+import 'package:rise_for_prayer/widgets/metania_counter.dart';
+
+enum RuleDay { monday, tuesday, wednesday, thursday, friday, saturday, sunday }
+
+class RuleHour {
+  const RuleHour(
+    this.am,
+    this.en,
+    this.time,
+    this.readings,
+    this.assignment, {
+    this.special = '',
+    this.psalmChapters = const [],
+    this.midnightPsalmChapters = const [],
+  });
+  final String am, en, time, assignment, special;
+  final List<String> readings;
+  final List<int> psalmChapters;
+  final List<int> midnightPsalmChapters;
+}
+
+/// Reusable reading content for the selected weekday and prayer hour.
+/// Embeds the same schedule content used by the full prayer-rule session.
+class WeeklyPrayerRuleReading extends StatelessWidget {
+  const WeeklyPrayerRuleReading({
+    super.key,
+    required this.day,
+    required this.hour,
+    this.language = 'en',
+  });
+  final int day;
+  final int hour;
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = weeklyPrayerRule[day][hour];
+    final colors = Theme.of(context).colorScheme;
+    const textSize = 19.0;
+    final amharicStyle = TextStyle(
+      fontFamily: 'AbyssinicaSIL',
+      color: colors.onSurface,
+      fontSize: textSize,
+      height: 1.9,
+    );
+    final prayerTextStyle = language == 'eth'
+        ? amharicStyle
+        : GoogleFonts.ebGaramond(
+            fontSize: textSize,
+            height: 1.7,
+            color: colors.onSurface,
+          );
+    Widget block(String title, List<Widget> children) => Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: .3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            textAlign: TextAlign.start,
+            style: GoogleFonts.cinzel(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: colors.primary,
+            ),
+          ),
+          const SizedBox(height: 14),
+          ...children,
+        ],
+      ),
+    );
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      block(localizedText(language, 'መክፈቻ ጸሎት', 'Opening prayers'), [
+        _prayerQuote(
+          localizedText(language, 'አቡነ ዘበሰማያት', 'Abune Zebesemayat'),
+          language == 'eth' ? _common : _commonEnglish,
+          prayerTextStyle,
+          colors,
+        ),
+        const SizedBox(height: 12),
+        _prayerQuote(
+          localizedText(language, 'የማርያም ጸሎት', 'Marian prayer'),
+          language == 'eth' ? _marianPrayer : _marianPrayerEnglish,
+          prayerTextStyle,
+          colors,
+        ),
+      ]),
+      block(localizedText(language, 'የመጽሐፍ ቅዱስ ንባቦች', 'Bible readings'), [
+        for (final reference in item.readings)
+          _BibleReadingCard(
+            referenceText: _referenceLabel(_referenceFor(reference), reference, language),
+            reference: _referenceFor(reference),
+            language: language,
+            textSize: textSize,
+          ),
+      ]),
+      if (item.psalmChapters.isNotEmpty)
+        block(localizedText(language, 'መዝሙረ ዳዊት', 'Psalms'), [
+          for (final chapter in item.psalmChapters)
+            _PsalmChapterCard(chapter: chapter, language: language, textSize: textSize),
+        ]),
+      if (item.midnightPsalmChapters.isNotEmpty)
+        block(localizedText(language, 'የእኩለ ሌሊት መዝሙር', 'Midnight Psalms'), [
+          for (final chapter in item.midnightPsalmChapters)
+            _PsalmChapterCard(chapter: chapter, language: language, textSize: textSize),
+        ]),
+      block(localizedText(language, 'የዕለቱ የጸሎት ሥርዓት', 'Prayer for this hour'), [
+        if (item.assignment.isNotEmpty)
+          SelectableText(
+            _assignmentLabel(item, day, hour, language),
+            textAlign: TextAlign.start,
+            style: prayerTextStyle,
+          ),
+        if (item.special.isNotEmpty) ...[
+          if (item.assignment.isNotEmpty) const SizedBox(height: 8),
+          SelectableText(
+            language == 'eth'
+                ? item.special
+                : 'Hymn of Praise to Mary for ${_daysEn[day]}',
+            textAlign: TextAlign.start,
+            style: prayerTextStyle,
+          ),
+        ],
+      ]),
+      block(localizedText(language, 'መዝጊያ ጸሎት', 'Closing prayer'), [
+        _prayerQuote(
+          localizedText(language, 'አቡነ ዘበሰማያት', 'Abune Zebesemayat'),
+          language == 'eth' ? _common : _commonEnglish,
+          prayerTextStyle,
+          colors,
+        ),
+      ]),
+    ]);
+  }
+
+  Widget _prayerQuote(
+    String title,
+    String text,
+    TextStyle style,
+    ColorScheme colors,
+  ) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+    decoration: BoxDecoration(
+      color: colors.primary.withValues(alpha: 0.045),
+      borderRadius: BorderRadius.circular(12),
+      border: Border(
+        left: BorderSide(color: colors.primary.withValues(alpha: 0.65), width: 3),
+      ),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: colors.primary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        SelectableText(text, textAlign: TextAlign.start, style: style),
+      ],
+    ),
+  );
+}
+
+const _days = ['ሰኞ', 'ማክሰኞ', 'ረቡዕ', 'ሐሙስ', 'ዓርብ', 'ቅዳሜ', 'እሑድ'];
+const _hours = [
+  ('ቀዳሚት', 'Prime', '12:00 ሰዓት'),
+  ('ሦስተኛ', 'Terce', '3:00 ሰዓት'),
+  ('ስድስተኛ', 'Sext', '6:00 ሰዓት'),
+  ('ዘጠነኛ', 'Nones', '9:00 ሰዓት'),
+  ('ምሽት', 'Vespers', '11:00 ሰዓት'),
+  ('ሌሊት', 'Compline', 'የመኝታ ጊዜ'),
+  ('መንፈቀ ሌሊት', 'Midnight', 'እኩለ ሌሊት'),
+];
+const _daysEn = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+];
+const _hourTimesEn = [
+  '6:00 AM',
+  '9:00 AM',
+  '12:00 PM',
+  '3:00 PM',
+  '6:00 PM',
+  '9:00 PM',
+  '12:00 AM',
+];
+const _readings = [
+  ['ማቴዎስ 27፥1-2', 'መዝሙር 5፥3'],
+  ['ዮሐንስ 19፥1', 'ሐዋርያት ሥራ 2፥15', 'ሉቃስ 1፥28', 'ዳንኤል 6፥10'],
+  ['ዮሐንስ 19፥23-29'],
+  ['ማርቆስ 15፥34-38', 'ማቴዎስ 27፥50', 'ሐዋርያት ሥራ 10፥1-4'],
+  ['ማቴዎስ 27፥58-60'],
+  ['ሉቃስ 11፥1-4', 'ማቴዎስ 26፥47-51'],
+  ['ማቴዎስ 25፥6', 'ሐዋርያት ሥራ 16፥25'],
+];
+const _ranges = [
+  ['1 – 5', '6 – 10', '11 – 15', '16 – 20', '21 – 25', '26 – 30'],
+  ['31 – 35', '36 – 40', '41 – 45', '46 – 50', '51 – 55', '56 – 60'],
+  ['61 – 63', '64 – 66', '67 – 69', '70 – 72', '73 – 76', '77 – 80'],
+  ['81 – 85', '86 – 90', '91 – 95', '96 – 100', '101 – 105', '106 – 110'],
+  [
+    '111 – 113',
+    '114 – 116',
+    '117 – 119 (ክፍል 1)',
+    '119 (ክፍል 2) – 122',
+    '123 – 126',
+    '127 – 130',
+  ],
+  [
+    '131 – 133',
+    '134 – 136',
+    '137 – 139',
+    '140 – 142',
+    '143 – 146',
+    '147 – 150',
+  ],
+];
+// Divide Psalms 1–30 across the seven midnight services, in weekday order.
+const _midnightPsalmRanges = [
+  (1, 5),
+  (6, 10),
+  (11, 14),
+  (15, 18),
+  (19, 22),
+  (23, 26),
+  (27, 30),
+];
+const _special = ['ዘሰኞ', 'ዘማክሰኞ', 'ዘረቡዕ', 'ዘሐሙስ', 'ዘዓርብ', 'ዘቅዳሜ', 'ዘእሑድ'];
+final weeklyPrayerRule = List<List<RuleHour>>.generate(
+  7,
+  (d) => List.generate(7, (h) {
+    final assignment = d == 6
+        ? const [
+            'ጸሎተ ነቢያት ክፍል 1 – 2 (ጸሎተ ሙሴ 1 እና 2)',
+            'ጸሎተ ነቢያት ክፍል 3 – 5 (ጸሎተ ሙሴ 3፣ ሐና፣ ሕዝቅያስ)',
+            'ጸሎተ ነቢያት ክፍል 6 – 8 (ጸሎተ ምናሴ፣ ዮናስ፣ ዳንኤል)',
+            'ጸሎተ ነቢያት ክፍል 9 – 11 (ጸሎተ ሠለስቱ ደቂቅ፣ ዕንባቆም፣ ኢሳይያስ)',
+            'ጸሎተ ነቢያት ክፍል 12 – 13 (ጸሎተ ማርያም፣ ዘካርያስ)',
+            'ጸሎተ ነቢያት ክፍል 14 – 15 (ጸሎተ ስምዖን፣ ዕዝራ)',
+            'ውዳሴ ማርያም ዘእሑድ እና ቅዳሴ ማርያም',
+          ][h]
+        : h == 6
+        ? ''
+        : 'መዝሙር ${_ranges[d][h]}';
+    final dailyPsalms = _dailyPsalmsForHour(d, h);
+    final assignmentText = d < 6
+        ? _psalmRangeLabel(dailyPsalms)
+        : assignment.toString();
+    final psalmChapters = dailyPsalms;
+    final midnightPsalmChapters = h == 6
+        ? List<int>.generate(
+            _midnightPsalmRanges[d].$2 - _midnightPsalmRanges[d].$1 + 1,
+            (index) => _midnightPsalmRanges[d].$1 + index,
+          )
+        : const <int>[];
+    return RuleHour(
+      _hours[h].$1,
+      _hours[h].$2,
+      _hours[h].$3,
+      List.unmodifiable(_readings[h]),
+      assignmentText,
+      special: h == 6 && d < 6 ? 'ውዳሴ ማርያም ${_special[d]}' : '',
+      psalmChapters: List.unmodifiable(psalmChapters),
+      midnightPsalmChapters: List.unmodifiable(midnightPsalmChapters),
+    );
+  }),
+);
+
+List<int> _chaptersFromRange(String range) {
+  final visibleRange = range.replaceAll(RegExp(r'\s*\([^)]*\)'), '');
+  final numbers = RegExp(r'\d+')
+      .allMatches(visibleRange)
+      .map((match) => int.parse(match.group(0)!))
+      .toList(growable: false);
+  if (numbers.isEmpty) return const [];
+  final first = numbers.first;
+  final last = numbers.length > 1 ? numbers.last : first;
+  return List<int>.generate(last - first + 1, (index) => first + index);
+}
+
+List<int> _dailyPsalmsForHour(int day, int hour) {
+  if (day < 0 || day >= 6 || hour < 0 || hour >= 7) return const [];
+  final chapters = _ranges[day]
+      .expand(_chaptersFromRange)
+      .toSet()
+      .toList()
+    ..sort();
+  final start = chapters.length * hour ~/ 7;
+  final end = chapters.length * (hour + 1) ~/ 7;
+  return List.unmodifiable(chapters.sublist(start, end));
+}
+
+String _psalmRangeLabel(List<int> chapters) {
+  if (chapters.isEmpty) return '';
+  final range = chapters.length == 1
+      ? '${chapters.first}'
+      : '${chapters.first}\u2013${chapters.last}';
+  return '\u1218\u12DD\u1239\u122D $range';
+}
+
+String _assignmentLabel(RuleHour item, int day, int hour, String language) {
+  if (language == 'eth') return item.assignment;
+  if (item.psalmChapters.isNotEmpty) {
+    final chapters = item.psalmChapters;
+    return chapters.length == 1
+        ? 'Psalm ${chapters.first}'
+        : 'Psalms ${chapters.first}–${chapters.last}';
+  }
+  if (day == 6 && hour < 6) {
+    const parts = [
+      'Prayer of Moses',
+      'Prayers of Moses, Hannah, and Hezekiah',
+      'Prayers of Manasseh, Jonah, and Daniel',
+      'Prayers of the Three Youths, Habakkuk, and Isaiah',
+      'Prayers of Mary and Zechariah',
+      'Prayers of Simeon and Ezra',
+    ];
+    return parts[hour];
+  }
+  if (day == 6 && hour == 6) {
+    return 'Wudase Maryam and Kidase Maryam';
+  }
+  if (item.special.isNotEmpty) return 'Hymn of Praise to Mary';
+  return '';
+}
+
+const String _commonEnglish = 'Our Father in heaven, hallowed be your name. Your kingdom come. Your will be done, on earth as it is in heaven. Give us this day our daily bread. Forgive us our sins, as we forgive those who sin against us. Lead us not into temptation, but deliver us from evil. For yours is the kingdom, the power, and the glory, forever. Amen.';
+const String _marianPrayerEnglish = 'Hail Mary, full of grace, the Lord is with you. Blessed are you among women, and blessed is the fruit of your womb, Jesus. Holy Mary, Mother of God, pray for us sinners, now and at the hour of our death. Amen.';
+
+String _referenceLabel(BibleReference? reference, String original, String language) {
+  if (language == 'eth' || reference == null) return original;
+  const books = {
+    'book_40': 'Matthew', 'psalms': 'Psalm', 'book_43': 'John',
+    'book_44': 'Acts', 'book_42': 'Luke', 'book_27': 'Daniel', 'book_41': 'Mark',
+  };
+  final book = books[reference.bookId];
+  if (book == null) return original;
+  final verses = reference.startVerse == reference.endVerse
+      ? '${reference.startVerse}'
+      : '${reference.startVerse}-${reference.endVerse}';
+  return '$book ${reference.chapter}:$verses';
+}
+
+String _dateKey(DateTime d) =>
+    '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+const String _common = '\u{12A0}\u{1261}\u{1290}\u{20}\u{12D8}\u{1260}\u{1230}\u{121B}\u{12EB}\u{1275}\u{20}\u{12ED}\u{1275}\u{1240}\u{12F0}\u{1235}\u{20}\u{1235}\u{121D}\u{12A8}\u{1363}\n\u{1275}\u{121D}\u{133B}\u{12A5}\u{20}\u{1218}\u{1295}\u{130D}\u{1225}\u{1275}\u{12A8}\u{20}\u{1363}\n\u{12C8}\u{12ED}\u{12A9}\u{1295}\u{20}\u{1348}\u{1243}\u{12F5}\u{12A8}\u{20}\u{1363}\n\u{1260}\u{12A8}\u{1218}\u{20}\u{1260}\u{1230}\u{121B}\u{12ED}\u{20}\u{1363}\n\u{12A8}\u{121B}\u{1201}\u{20}\u{1260}\u{121D}\u{12F5}\u{122D}\u{1363}\n\u{1232}\u{1233}\u{12E8}\u{1290}\u{1363}\n\u{12D8}\u{1208}\u{1208}\u{20}\u{12D5}\u{1208}\u{1275}\u{1290}\u{1363}\n\u{1203}\u{1260}\u{1290}\u{20}\u{12EE}\u{121D}\u{1362}\n\u{1285}\u{12F5}\u{130D}\u{20}\u{1208}\u{1290}\u{1363}\n\u{12A0}\u{1260}\u{1233}\u{1290}\u{20}\u{12C8}\u{130C}\u{130B}\u{12E8}\u{1290}\u{1363}\n\u{12A8}\u{1218}\u{20}\u{1295}\u{1215}\u{1290}\u{1292}\u{20}\u{1295}\u{1285}\u{12F5}\u{130D}\u{20}\u{1208}\u{12D8}\u{12A0}\u{1260}\u{1230}\u{20}\u{1208}\u{1290}\u{1362}\n\u{12A2}\u{1273}\u{1265}\u{12A0}\u{1290}\u{20}\u{12A5}\u{130D}\u{12DA}\u{12A6}\u{20}\u{12CD}\u{1235}\u{1270}\u{20}\u{1218}\u{1295}\u{1231}\u{1275}\u{1363}\n\u{12A3}\u{120B}\u{20}\u{12A0}\u{12F5}\u{1285}\u{1290}\u{1290}\u{20}\u{12C8}\u{1263}\u{120D}\u{1210}\u{1290}\u{1363}\n\u{12A5}\u{121D}\u{12A9}\u{1209}\u{20}\u{12A5}\u{12A9}\u{12ED}\u{1363}\n\u{12A5}\u{1235}\u{1218}\u{20}\u{12DA}\u{12A3}\u{12A8}\u{1363}\n\u{12ED}\u{12A5}\u{1272}\u{20}\u{1218}\u{1295}\u{130D}\u{1225}\u{1275}\u{1363}\n\u{1283}\u{12ED}\u{120D}\u{20}\u{12C8}\u{1235}\u{1265}\u{1210}\u{1275}\u{1363}\n\u{1208}\u{12D3}\u{1208}\u{1218}\u{20}\u{12D3}\u{1208}\u{121D}\u{1363}\u{12A0}\u{121C}\u{1295}\u{1362}';
+
+const String _marianPrayer = '\u{1260}\u{1230}\u{120B}\u{1218}\u{1363}\n\u{1245}\u{12F1}\u{1235}\u{20}\u{1308}\u{1265}\u{122D}\u{12A4}\u{120D}\u{20}\u{1218}\u{120D}\u{12A0}\u{12AD}\u{1363}\n\u{12A6}\u{20}\u{12A5}\u{130D}\u{12DD}\u{12A5}\u{1275}\u{12E8}\u{20}\u{121B}\u{122D}\u{12EB}\u{121D}\u{20}\u{1230}\u{120B}\u{121D}\u{20}\u{1208}\u{12AA}\u{1363}\n\u{12F5}\u{1295}\u{130D}\u{120D}\u{20}\u{1265}\u{1285}\u{120A}\u{1293}\u{12AA}\u{20}\u{1363}\n\u{12C8}\u{12F5}\u{1295}\u{130D}\u{120D}\u{20}\u{1260}\u{1225}\u{130B}\u{12AA}\u{1362}\n\u{12A5}\u{1218}\u{20}\u{12A5}\u{130D}\u{12DA}\u{12A0}\u{1265}\u{1214}\u{122D}\u{20}\u{1338}\u{1263}\u{12D6}\u{1275}\u{20}\u{1230}\u{120B}\u{121D}\u{20}\u{1208}\u{12AA}\u{1362}\n\u{1261}\u{122D}\u{12AD}\u{1275}\u{20}\u{12A0}\u{1295}\u{1272}\u{20}\u{12A5}\u{121D}\u{12A0}\u{1295}\u{1235}\u{1275}\u{1363}\n\u{12C8}\u{1261}\u{1229}\u{12AD}\u{20}\u{134D}\u{122C}\u{20}\u{12A8}\u{122D}\u{1225}\u{12AA}\u{1362}\n\u{1270}\u{1348}\u{1225}\u{1212}\u{20}\u{134D}\u{1225}\u{1215}\u{1275}\u{20}\u{12A6}\u{20}\u{121D}\u{120D}\u{12A5}\u{1270}\u{20}\u{1338}\u{130B}\u{20}\u{12A5}\u{130D}\u{12DA}\u{12A0}\u{1265}\u{1214}\u{122D}\u{20}\u{121D}\u{1235}\u{120C}\u{12AA}\u{1362}\n\u{1230}\u{12A0}\u{120A}\u{20}\u{12C8}\u{1338}\u{120D}\u{12EA}\u{20}\u{121D}\u{1215}\u{1228}\u{1275}\u{20}\u{1260}\u{12A5}\u{1295}\u{1272}\u{12A3}\u{1290}\u{1363}\n\u{1280}\u{1260}\u{20}\u{134D}\u{1241}\u{122D}\u{20}\u{12C8}\u{120D}\u{12F5}\u{12AA}\u{20}\u{12A2}\u{12E8}\u{1231}\u{1235}\u{20}\u{12AD}\u{122D}\u{1235}\u{1276}\u{1235}\u{1363}\n\u{12A8}\u{1218}\u{20}\u{12ED}\u{1225}\u{1228}\u{12ED}\u{20}\u{1208}\u{1290}\u{20}\u{1283}\u{1323}\u{12CD}\u{12A2}\u{1290}\u{1362}';
+
+
+class WeeklyPrayerRuleScreen extends ConsumerStatefulWidget {
+  const WeeklyPrayerRuleScreen({super.key});
+  @override
+  ConsumerState<WeeklyPrayerRuleScreen> createState() =>
+      _WeeklyPrayerRuleScreenState();
+}
+
+class _WeeklyPrayerRuleScreenState extends ConsumerState<WeeklyPrayerRuleScreen> {
+  final _search = TextEditingController();
+  Future<int> _done(int d) async {
+    final p = await SharedPreferences.getInstance();
+    return List.generate(
+      7,
+      (h) => p.getBool('weekly_${_dateKey(DateTime.now())}_${d}_$h') ?? false,
+    ).where((v) => v).length;
+  }
+
+  @override
+  void dispose() { _search.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    final language = ref.watch(settingsProvider).language;
+    String dayName(int index) => localizedText(language, _days[index], _daysEn[index]);
+    return Scaffold(
+    appBar: AppBar(title: Text(localizedText(language, 'የሳምንቱ የጸሎት ሥርዓት', 'Weekly prayer rule'))),
+    body: Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text(
+              localizedText(language, 'መዝሙረ ዳዊት እና የጸሎት ሥርዓት', 'Psalms and the daily prayer order'),
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 22),
+            ),
+            const SizedBox(height: 16),
+            TextField(controller: _search, decoration: InputDecoration(prefixIcon: const Icon(Icons.search), hintText: localizedText(language, 'መዝሙር፣ መጽሐፍ፣ ቀን ወይም ጸሎት ፈልግ', 'Search psalms, readings, days, or prayers')), onChanged: (_) => setState(() {})),
+            const SizedBox(height: 8),
+            FilledButton.tonal(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RuleDayScreen(day: DateTime.now().weekday - 1))), child: Text(localizedText(language, 'የዛሬ ጸሎት', "Today's prayer"))),
+            for (var d = 0; d < 7; d++)
+              if (_search.text.isEmpty ||
+                  dayName(d).toLowerCase().contains(_search.text.toLowerCase()) ||
+                  weeklyPrayerRule[d].any((item) =>
+                      item.am.contains(_search.text) ||
+                      item.en.toLowerCase().contains(_search.text.toLowerCase()) ||
+                      item.assignment.contains(_search.text) ||
+                      item.special.contains(_search.text) ||
+                      item.readings.any((r) => r.contains(_search.text))))
+              Card(
+                color: d == DateTime.now().weekday - 1 ? Theme.of(context).colorScheme.primaryContainer : null,
+                child: ListTile(
+                  isThreeLine: true,
+                  title: Text(dayName(d), style: const TextStyle(fontSize: 21)),
+                  subtitle: Text(
+                    d == 6
+                        ? localizedText(language, 'ጸሎተ ነቢያት · 15ቱ ክፍሎች', 'Prayer of the Prophets · 15 parts')
+                        : localizedText(language, 'መዝሙር ${_ranges[d].first} – ${_ranges[d].last}', 'Psalms ${_ranges[d].first} – ${_ranges[d].last}'),
+                  ),
+                  trailing: FutureBuilder<int>(
+                    future: _done(d),
+                    builder: (c, s) => Text('${s.data ?? 0}/7 ${localizedText(language, 'ተጠናቋል', 'done')}'),
+                  ),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => RuleDayScreen(day: d)),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
+  }
+}
+
+class RuleDayScreen extends ConsumerWidget {
+  const RuleDayScreen({super.key, required this.day});
+  final int day;
+  @override
+  Widget build(BuildContext c, WidgetRef ref) {
+    final language = ref.watch(settingsProvider).language;
+    final dayName = localizedText(language, _days[day], _daysEn[day]);
+    return Scaffold(
+    appBar: AppBar(title: Text(dayName)),
+    body: Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(dayName, style: Theme.of(c).textTheme.headlineSmall),
+                  const SizedBox(height: 4),
+                  Text(localizedText(language, '7 የጸሎት ሰዓታት · ${day == 6 ? '15 የነቢያት ጸሎት ክፍሎች' : 'መዝሙር ${_ranges[day].first} – ${_ranges[day].last}'}', '7 prayer hours · ${day == 6 ? '15-part Prayer of the Prophets' : 'Psalms ${_ranges[day].first} – ${_ranges[day].last}'}')),
+                  const SizedBox(height: 12),
+                  FutureBuilder<int>(future: _completedForToday(day), builder: (context, snapshot) {
+                    final count = snapshot.data ?? 0;
+                    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(localizedText(language, 'ዛሬ የተጠናቀቀው: $count / 7', 'Completed today: $count / 7')),
+                      const SizedBox(height: 6),
+                      LinearProgressIndicator(value: count / 7),
+                    ]);
+                  }),
+                ]),
+              ),
+            ),
+            const SizedBox(height: 8),
+            for (var h = 0; h < 7; h++)
+              _RuleHourTile(day: day, hour: h, language: language),
+          ],
+        ),
+      ),
+    ),
+  );
+  }
+}
+
+Future<int> _completedForToday(int day) async {
+  final prefs = await SharedPreferences.getInstance();
+  var count = 0;
+  for (var hour = 0; hour < 7; hour++) {
+    if (prefs.getBool('weekly_${_dateKey(DateTime.now())}_${day}_$hour') ?? false) count++;
+  }
+  return count;
+}
+
+class _RuleHourTile extends StatelessWidget {
+  const _RuleHourTile({required this.day, required this.hour, required this.language});
+  final int day, hour;
+  final String language;
+  @override
+  Widget build(BuildContext context) {
+    final item = weeklyPrayerRule[day][hour];
+    final colors = Theme.of(context).colorScheme;
+    final isEnglish = language == 'en';
+    final assignment = _assignmentLabel(item, day, hour, language);
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RuleSessionScreen(day: day, hour: hour))),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            CircleAvatar(radius: 18, backgroundColor: colors.primaryContainer, child: Text('${hour + 1}'.padLeft(2, '0'), style: TextStyle(color: colors.onPrimaryContainer, fontWeight: FontWeight.bold))),
+            const SizedBox(width: 14),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(localizedText(language, item.am, item.en), style: Theme.of(context).textTheme.titleMedium, softWrap: true),
+              const SizedBox(height: 3),
+              Text(
+                '${localizedText(language, item.time, _hourTimesEn[hour])} ${localizedText(language, 'ሰዓት', 'hour')}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              if (assignment.isNotEmpty || item.midnightPsalmChapters.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  [
+                    if (assignment.isNotEmpty) assignment,
+                    if (item.midnightPsalmChapters.isNotEmpty)
+                      localizedText(
+                        language,
+                        'የእኩለ ሌሊት መዝሙር ${item.midnightPsalmChapters.first}–${item.midnightPsalmChapters.last}',
+                        'Midnight Psalms ${item.midnightPsalmChapters.first}–${item.midnightPsalmChapters.last}',
+                      ),
+                  ].join(' · '),
+                  style: Theme.of(context).textTheme.bodyMedium,
+                  softWrap: true,
+                ),
+              ],
+              if (item.special.isNotEmpty && !isEnglish) ...[
+                const SizedBox(height: 4),
+                Text(item.special, style: Theme.of(context).textTheme.bodyMedium, softWrap: true),
+              ],
+              const SizedBox(height: 6),
+              Text(localizedText(language, '${item.readings.length} ንባቦች', '${item.readings.length} readings'), style: Theme.of(context).textTheme.labelSmall),
+            ])),
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+class RuleSessionScreen extends ConsumerStatefulWidget {
+  const RuleSessionScreen({super.key, required this.day, required this.hour});
+  final int day, hour;
+  @override
+  ConsumerState<RuleSessionScreen> createState() => _RuleSessionScreenState();
+}
+
+class _RuleSessionScreenState extends ConsumerState<RuleSessionScreen> {
+  bool done = false;
+  bool _showCelebration = false;
+  bool _leavingAfterCompletion = false;
+  bool _isUpcomingHour = false;
+  Timer? _unlockTimer;
+  @override
+  void initState() {
+    super.initState();
+    _updateCompletionLock(notify: false);
+    _load();
+  }
+
+  void _updateCompletionLock({bool notify = true}) {
+    final timeService = ref.read(timeServiceProvider);
+    final now = timeService.now;
+    var isUpcoming = false;
+    if (widget.day == now.weekday - 1) {
+      final occurrence = timeService
+          .prayerOccurrencesFor(now)
+          .firstWhere((item) => item.prayerHour.readerIndex == widget.hour);
+      isUpcoming =
+          timeService.prayerStatus(occurrence, now) == PrayerStatus.upcoming;
+      _unlockTimer?.cancel();
+      if (isUpcoming) {
+        final wait = occurrence.at.difference(now);
+        _unlockTimer = Timer(wait + const Duration(milliseconds: 100), () {
+          if (mounted) _updateCompletionLock();
+        });
+      }
+    } else {
+      _unlockTimer?.cancel();
+    }
+    if (_isUpcomingHour == isUpcoming) return;
+    if (notify) {
+      setState(() => _isUpcomingHour = isUpcoming);
+    } else {
+      _isUpcomingHour = isUpcoming;
+    }
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) setState(() => done = prefs.getBool(_key) ?? false);
+  }
+  String get _key => 'weekly_${_dateKey(DateTime.now())}_${widget.day}_${widget.hour}';
+  Future<void> _toggle() async {
+    if (_leavingAfterCompletion || _isUpcomingHour) return;
+    final nextValue = !done;
+    setState(() {
+      done = nextValue;
+      _showCelebration = nextValue;
+      _leavingAfterCompletion = nextValue;
+    });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_key, nextValue);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          done = !nextValue;
+          _showCelebration = false;
+          _leavingAfterCompletion = false;
+        });
+      }
+      return;
+    }
+    // Prayer completion is recorded only from this explicit button action.
+    // Metania taps and its auto-count timer never complete the prayer.
+    ref.read(prayerProvider).setHourCompleted(widget.hour, nextValue);
+    if (!nextValue) return;
+    await Future<void>.delayed(const Duration(milliseconds: 1250));
+    if (!mounted) return;
+    Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
+  }
+
+  @override
+  void dispose() {
+    _unlockTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = weeklyPrayerRule[widget.day][widget.hour];
+    final language = ref.watch(settingsProvider).language;
+    const textSize = 19.0;
+    final isEnglish = language == 'en';
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    TextStyle ethiopic({double size = 19, FontWeight weight = FontWeight.normal}) => TextStyle(
+      fontFamily: 'AbyssinicaSIL', fontSize: size, fontWeight: weight,
+      height: 1.85, color: colors.onSurface,
+    );
+    Widget section(String title, Widget child) => Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: colors.surface, borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: .35)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: isEnglish
+            ? GoogleFonts.cinzel(fontSize: 17, fontWeight: FontWeight.w700, color: colors.primary)
+            : ethiopic(size: 22, weight: FontWeight.w600)),
+        const SizedBox(height: 12), child,
+      ]),
+    );
+
+    return Scaffold(
+      appBar: AppBar(title: Text(localizedText(language, item.am, item.en), style: isEnglish ? GoogleFonts.cinzel(fontSize: 18, fontWeight: FontWeight.w600) : ethiopic(size: 22, weight: FontWeight.w600))),
+      body: Stack(children: [
+        Center(child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 24), children: [
+          Container(
+            margin: const EdgeInsets.only(bottom: 14), padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(color: colors.primaryContainer, borderRadius: BorderRadius.circular(24)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${localizedText(language, _days[widget.day], _daysEn[widget.day])}  |  ${widget.hour + 1} / 7', style: theme.textTheme.labelLarge),
+              const SizedBox(height: 8),
+              Text(localizedText(language, item.am, item.en), textAlign: TextAlign.start, style: isEnglish ? GoogleFonts.cinzel(fontSize: 27, fontWeight: FontWeight.w700, color: colors.onPrimaryContainer) : ethiopic(size: 28, weight: FontWeight.w600).copyWith(color: colors.onPrimaryContainer)),
+              const SizedBox(height: 4),
+              Text('${localizedText(language, item.time, _hourTimesEn[widget.hour])}  |  ${localizedText(language, 'ሰዓት', 'Prayer hour')}', style: theme.textTheme.titleMedium?.copyWith(color: colors.onPrimaryContainer)),
+            ]),
+          ),
+          if (_isUpcomingHour)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+              decoration: BoxDecoration(
+                color: colors.secondaryContainer.withValues(alpha: 0.65),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                localizedText(
+                  language,
+                  'ይህ የጸሎት ሰዓት ገና አልደረሰም። ማንበብ ይችላሉ፤ ጸሎቱን ማጠናቀቅ የሚቻለው ሰዓቱ ሲደርስ ነው።',
+                  'This prayer hour has not started yet. You can read it now, and mark it complete when its time arrives.',
+                ),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colors.onSecondaryContainer,
+                ),
+              ),
+            ),
+          section(localizedText(language, 'መክፈቻ ጸሎት', 'Opening prayers'), Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(isEnglish ? _commonEnglish : _common, style: isEnglish ? GoogleFonts.ebGaramond(fontSize: textSize, height: 1.7) : ethiopic(size: textSize)),
+            const SizedBox(height: 20),
+            Text(isEnglish ? _marianPrayerEnglish : _marianPrayer, style: isEnglish ? GoogleFonts.ebGaramond(fontSize: textSize, height: 1.7) : ethiopic(size: textSize)),
+          ])),
+          section(localizedText(language, 'ንባብ', 'Bible readings'), Column(children: [
+            for (final ref in item.readings) _BibleReadingCard(referenceText: _referenceLabel(_referenceFor(ref), ref, language), reference: _referenceFor(ref), language: language, textSize: textSize),
+          ])),
+          if (item.psalmChapters.isNotEmpty || item.midnightPsalmChapters.isNotEmpty)
+            section(
+              localizedText(
+                language,
+                item.midnightPsalmChapters.isNotEmpty ? 'የእኩለ ሌሊት መዝሙር' : 'መዝሙረ ዳዊት',
+                item.midnightPsalmChapters.isNotEmpty ? 'Midnight Psalms' : 'Psalms',
+              ),
+              Column(children: [
+                for (final chapter in [...item.psalmChapters, ...item.midnightPsalmChapters])
+                  _PsalmChapterCard(chapter: chapter, language: language, textSize: textSize),
+              ]),
+            ),
+          section(localizedText(language, 'የዕለቱ የጸሎት ሥርዓት', 'Prayer for this hour'), Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (_assignmentLabel(item, widget.day, widget.hour, language).isNotEmpty) Text(_assignmentLabel(item, widget.day, widget.hour, language), style: isEnglish ? GoogleFonts.ebGaramond(fontSize: textSize, height: 1.7) : ethiopic(size: textSize)),
+            if (item.special.isNotEmpty) ...[const SizedBox(height: 8), Text(isEnglish ? 'Hymn of Praise to Mary for ${_daysEn[widget.day]}' : item.special, style: isEnglish ? GoogleFonts.ebGaramond(fontSize: textSize, height: 1.7) : ethiopic(size: textSize))],
+          ])),
+          section(localizedText(language, 'መዝጊያ ጸሎት', 'Closing prayer'), Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(isEnglish ? _commonEnglish : _common, style: isEnglish ? GoogleFonts.ebGaramond(fontSize: textSize, height: 1.7) : ethiopic(size: textSize)),
+          ])),
+          const SizedBox(height: 14),
+          MetaniaCounter(
+            prayerHourId: widget.hour,
+            enabled: !_isUpcomingHour,
+          ),
+        ]),
+      )),
+        if (_showCelebration)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: ColoredBox(
+                color: colors.scrim.withValues(alpha: 0.34),
+                child: SafeArea(
+                  child: Center(
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween<double>(begin: 0.72, end: 1),
+                      duration: const Duration(milliseconds: 620),
+                      curve: Curves.elasticOut,
+                      builder: (context, scale, child) => Opacity(
+                        opacity: scale.clamp(0, 1),
+                        child: Transform.scale(scale: scale, child: child),
+                      ),
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 32),
+                        padding: const EdgeInsets.fromLTRB(28, 26, 28, 24),
+                        decoration: BoxDecoration(
+                          color: colors.surface,
+                          borderRadius: BorderRadius.circular(28),
+                          border: Border.all(
+                            color: colors.tertiary.withValues(alpha: 0.42),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: colors.scrim.withValues(alpha: 0.2),
+                              blurRadius: 32,
+                              offset: const Offset(0, 16),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 76,
+                              height: 76,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: colors.tertiaryContainer,
+                              ),
+                              child: Icon(
+                                Icons.check_rounded,
+                                size: 42,
+                                color: colors.onTertiaryContainer,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              localizedText(language, 'ጸሎቱ ተጠናቋል', 'Prayer complete'),
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.cinzel(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                                color: colors.onSurface,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              localizedText(language, 'መልካም ሥራ። ወደ ሰዓታት በመመለስ ላይ…', 'Well done. Returning to Hours…'),
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ]),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
+          child: Align(
+            alignment: Alignment.center,
+            heightFactor: 1,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 760),
+              child: SizedBox(
+                width: double.infinity,
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 0, end: done ? 1 : 0),
+                  duration: const Duration(milliseconds: 420),
+                  curve: Curves.easeInOutCubic,
+                  builder: (context, progress, _) {
+                    final background = Color.lerp(
+                      colors.primary,
+                      colors.tertiary,
+                      progress,
+                    )!;
+                    final foreground = Color.lerp(
+                      colors.onPrimary,
+                      colors.onTertiary,
+                      progress,
+                    )!;
+                    return FilledButton.icon(
+                      onPressed: _leavingAfterCompletion || _isUpcomingHour
+                          ? null
+                          : _toggle,
+                      icon: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 360),
+                        transitionBuilder: (child, animation) => ScaleTransition(
+                          scale: CurvedAnimation(
+                            parent: animation,
+                            curve: Curves.elasticOut,
+                          ),
+                          child: FadeTransition(opacity: animation, child: child),
+                        ),
+                        child: Icon(
+                          done ? Icons.check_circle : Icons.check_circle_outline,
+                          key: ValueKey(done),
+                        ),
+                      ),
+                      label: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        transitionBuilder: (child, animation) => FadeTransition(
+                          opacity: animation,
+                          child: SlideTransition(
+                            position: Tween<Offset>(
+                              begin: const Offset(0, 0.25),
+                              end: Offset.zero,
+                            ).animate(animation),
+                            child: child,
+                          ),
+                        ),
+                        child: Text(
+                          _isUpcomingHour
+                              ? localizedText(
+                                  language,
+                                  'ጊዜው ሲደርስ ይከፈታል',
+                                  'Locked until prayer time',
+                                )
+                              : done
+                                  ? localizedText(language, 'ተጠናቋል - መልስ', 'Completed - undo')
+                                  : localizedText(language, 'ጸሎቱን ጨርሻለሁ', 'Mark prayer complete'),
+                          key: ValueKey('completion-label-$done'),
+                        ),
+                      ),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: background,
+                        foregroundColor: foreground,
+                        padding: const EdgeInsets.symmetric(vertical: 17),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+/// Loads full Psalm text from the bundled book 19 asset through BibleRepository.
+final Map<String, Future<BibleChapter>> _psalmTextCache = {};
+
+class _PsalmChapterCard extends StatelessWidget {
+  const _PsalmChapterCard({required this.chapter, required this.language, this.textSize = 19});
+  final int chapter;
+  final String language;
+  final double textSize;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: FutureBuilder<BibleChapter>(
+      future: _psalmTextCache.putIfAbsent(
+        '$chapter:$language',
+        () => const BibleRepository().getChapter(
+          'psalms',
+          chapter,
+          language: language == 'eth'
+              ? BibleLanguage.amharic
+              : BibleLanguage.english,
+        ),
+      ),
+      builder: (context, snapshot) {
+        final verses = snapshot.data?.verses;
+        return ExpansionTile(
+          title: Text(localizedText(language, 'መዝሙር $chapter', 'Psalm $chapter')),
+          subtitle: snapshot.connectionState == ConnectionState.waiting
+              ? Text(localizedText(language, 'መዝሙር በመጫን ላይ…', 'Loading Psalm…'))
+              : snapshot.hasError
+              ? Text(localizedText(language, 'የመዝሙሩን ጽሑፍ መክፈት አልተቻለም።', 'Could not load this Psalm.'))
+              : Text(localizedText(language, '${verses?.length ?? 0} ቁጥሮች', '${verses?.length ?? 0} verses')),
+          children: [
+            if (verses != null)
+              for (final verse in verses)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '${verse.verse}.  ${language == 'eth' ? verse.amharicText : verse.englishText ?? 'English text unavailable.'}',
+                      style: language == 'eth'
+                          ? TextStyle(fontFamily: 'AbyssinicaSIL', fontSize: textSize, height: 1.85)
+                          : GoogleFonts.ebGaramond(fontSize: textSize, height: 1.7),
+                    ),
+                  ),
+                ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+BibleReference? _referenceFor(String text) {
+  const values = <String, (String, int, int, int)>{
+    'ማቴዎስ 27፥1-2': ('book_40', 27, 1, 2),
+    'መዝሙር 5፥3': ('psalms', 5, 3, 3),
+    'ዮሐንስ 19፥1': ('book_43', 19, 1, 1),
+    'ሐዋርያት ሥራ 2፥15': ('book_44', 2, 15, 15),
+    'ሉቃስ 1፥28': ('book_42', 1, 28, 28),
+    'ዳንኤል 6፥10': ('book_27', 6, 10, 10),
+    'ዮሐንስ 19፥23-29': ('book_43', 19, 23, 29),
+    'ማርቆስ 15፥34-38': ('book_41', 15, 34, 38),
+    'ማቴዎስ 27፥50': ('book_40', 27, 50, 50),
+    'ሐዋርያት ሥራ 10፥1-4': ('book_44', 10, 1, 4),
+    'ማቴዎስ 27፥58-60': ('book_40', 27, 58, 60),
+    'ሉቃስ 11፥1-4': ('book_42', 11, 1, 4),
+    'ማቴዎስ 26፥47-51': ('book_40', 26, 47, 51),
+    'ማቴዎስ 25፥6': ('book_40', 25, 6, 6),
+    'ሐዋርያት ሥራ 16፥25': ('book_44', 16, 25, 25),
+  };
+  final normalized = text;
+  final all = _readings.expand((group) => group).toList(growable: false);
+  final i = all.indexOf(normalized);
+  const ordered = <(String, int, int, int)>[
+    ('book_40', 27, 1, 2), ('psalms', 5, 3, 3),
+    ('book_43', 19, 1, 1), ('book_44', 2, 15, 15), ('book_42', 1, 28, 28), ('book_27', 6, 10, 10),
+    ('book_43', 19, 23, 29), ('book_41', 15, 34, 38), ('book_40', 27, 50, 50), ('book_44', 10, 1, 4),
+    ('book_40', 27, 58, 60), ('book_42', 11, 1, 4), ('book_40', 26, 47, 51), ('book_40', 25, 6, 6), ('book_44', 16, 25, 25),
+  ];
+  final value = values[normalized] ?? (i < 0 ? null : ordered[i]);
+  return value == null
+      ? null
+      : BibleReference(bookId: value.$1, chapter: value.$2, startVerse: value.$3, endVerse: value.$4, label: text);
+}
+
+class _BibleReadingCard extends StatelessWidget {
+  const _BibleReadingCard({required this.referenceText, required this.reference, required this.language, this.textSize = 19});
+  final String referenceText;
+  final BibleReference? reference;
+  final String language;
+  final double textSize;
+
+  @override
+  Widget build(BuildContext context) {
+    if (reference == null) return Card(child: ListTile(title: Text(referenceText), subtitle: Text(localizedText(language, 'የመጽሐፍ ቅዱስ ምንጭ አልተገኘም።', 'Reference text is unavailable.'))));
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: FutureBuilder<List<BibleVerse>>(
+          future: const BibleRepository().getPassage(
+            reference!,
+            language: language == 'eth'
+                ? BibleLanguage.amharic
+                : BibleLanguage.english,
+          ),
+          builder: (context, snapshot) {
+            final verses = snapshot.data;
+            return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [Expanded(child: Text(referenceText, style: Theme.of(context).textTheme.titleSmall)), IconButton(tooltip: localizedText(language, 'መጽሐፍ ቅዱስን ክፈት', 'Open Bible passage'), icon: const Icon(Icons.open_in_new), onPressed: () => Navigator.pushNamed(context, '/bible', arguments: reference))]),
+              if (snapshot.connectionState == ConnectionState.waiting) const LinearProgressIndicator(),
+              if (snapshot.hasError) Text(localizedText(language, 'ይህን ንባብ መጫን አልተቻለም።', 'Unable to load this passage.')),
+              if (verses != null) for (final verse in verses)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    '${verse.verse}.  ${language == 'eth' ? verse.amharicText : verse.englishText ?? 'English text unavailable.'}',
+                    style: language == 'eth'
+                        ? TextStyle(fontFamily: 'AbyssinicaSIL', fontSize: textSize, height: 1.85)
+                        : GoogleFonts.ebGaramond(fontSize: textSize, height: 1.7),
+                  ),
+                ),
+            ]);
+          },
+        ),
+      ),
+    );
+  }
+}
