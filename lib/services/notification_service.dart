@@ -8,6 +8,8 @@ import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
 class NotificationService {
+  static const MethodChannel _androidInfoChannel =
+      MethodChannel('rise_for_prayer/android');
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
   static bool _initialized = false;
@@ -112,20 +114,18 @@ class NotificationService {
           AndroidFlutterLocalNotificationsPlugin
         >();
     if (androidImplementation != null) {
-      bool? granted;
-      try {
-        granted = await androidImplementation.requestNotificationsPermission();
-      } on MissingPluginException {
-        _notificationsEnabled = true;
-        _available = true;
-        return true;
+      final sdkInt = await _androidSdkInt();
+      if (sdkInt >= 33) {
+        final granted = await androidImplementation.requestNotificationsPermission();
+        if (granted == false) {
+          await refreshPermissionStatus();
+          _lastError = 'Prayer reminders are disabled because notification permission is off.';
+          return false;
+        }
       }
-      if (granted == false) {
-        await refreshPermissionStatus();
-        _lastError = 'Prayer reminders are disabled because notification permission is off.';
-        return false;
+      if (sdkInt >= 31) {
+        await androidImplementation.requestExactAlarmsPermission();
       }
-      await androidImplementation.requestExactAlarmsPermission();
     } else {
       final iosImplementation = _plugin
           .resolvePlatformSpecificImplementation<
@@ -146,6 +146,16 @@ class NotificationService {
       }
     }
     return refreshPermissionStatus();
+  }
+
+  static Future<int> _androidSdkInt() async {
+    try {
+      return await _androidInfoChannel.invokeMethod<int>('sdkInt') ?? 0;
+    } on MissingPluginException {
+      return 0;
+    } on PlatformException {
+      return 0;
+    }
   }
 
   static Future<bool> refreshPermissionStatus() async {
