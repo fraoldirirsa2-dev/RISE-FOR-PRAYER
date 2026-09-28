@@ -6,7 +6,10 @@
       "request": "launch",
       "type": "dart",
       "deviceId": "emulator-5554",
-      "flutterMode": "debug"
+      "flutterMode": "debug",
+      "env": {
+        "JAVA_HOME": "C:\\Program Files\\Java\\jdk-21.0.12.1"
+      }
     }
   ]
 }
