@@ -34,14 +34,16 @@ class NotificationService {
   static void Function(int prayerIndex)? onPrayerNotificationTap;
 
   // Preferred Android notification icon (drawable basename, no extension).
-  // The file must live at android/app/src/main/res/drawable/<name>.xml|png.
-  static const String _androidIconName = 'ic_notification_rise_vector';
+  // The file MUST live at android/app/src/main/res/drawable/notification_icon.png
+  // (or notification_icon.xml). It cannot be in a mipmap folder — the plugin
+  // only queries the `drawable` resource type.
+  static const String _androidIconName = 'notification_icon';
 
-  // Fallbacks tried, in order, if the preferred icon is rejected.
+  // Fallbacks tried, in order, if the preferred icon is rejected. Keep this
+  // list short and realistic; entries that don't exist just add log noise.
   static const List<String> _androidIconFallbacks = <String>[
+    'ic_launcher_rise',
     'ic_launcher',
-    'app_icon',
-    'ic_stat_icon',
   ];
 
   static const String _androidRawSoundName = 'a';
@@ -78,15 +80,10 @@ class NotificationService {
 
       _lastError = null;
 
-      // Resolve the notification icon: try the custom one, fall back to
-      // well-known names. Each attempt uses a fresh plugin instance because
-      // the plugin caches `_initialized = true` before the native call.
       await _initializePluginWithIconFallback();
 
       final android = _androidPlugin;
 
-      // Create channels *before* reading permission status so a partial
-      // failure can be recorded in `_lastError` and not wiped out.
       await _createChannels(android);
       await _readNotificationStatus(android, clearError: false);
 
@@ -136,7 +133,7 @@ class NotificationService {
           _lastError =
               'Notification icon "$_androidIconName" not found; '
               'using "$icon" instead. Add '
-              'android/app/src/main/res/drawable/$_androidIconName.xml '
+              'android/app/src/main/res/drawable/$_androidIconName.png '
               'to restore the custom icon.';
         }
         return;
@@ -414,7 +411,6 @@ class NotificationService {
   static Future<void> cancel(int id) async {
     if (!await _ensureInitialized()) return;
     await _plugin.cancel(id);
-    // Cancel the secondary ID used by earlier versions of the app.
     await _plugin.cancel(id + 100);
   }
 
