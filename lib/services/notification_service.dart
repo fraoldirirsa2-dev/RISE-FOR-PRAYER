@@ -10,7 +10,10 @@ import 'package:timezone/timezone.dart' as tz;
 /// Owns notification initialization, permission checks, test notifications,
 /// and the daily prayer reminder schedule.
 class NotificationService {
-  static final FlutterLocalNotificationsPlugin _plugin =
+  /// Not `final`: `_initialize()` may swap in a new plugin instance if the
+  /// preferred icon is rejected by Android, because the plugin marks itself
+  /// initialized *before* the native call and cannot be retried in place.
+  static FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
   static bool _initialized = false;
@@ -30,9 +33,17 @@ class NotificationService {
   static String? get lastError => _lastError;
   static void Function(int prayerIndex)? onPrayerNotificationTap;
 
-  // Keep these strings in one place so they line up with the Android
-  // resources: res/drawable/ic_notification_rise_vector.* and res/raw/a.*.
+  // Preferred Android notification icon (drawable basename, no extension).
+  // The file must live at android/app/src/main/res/drawable/<name>.xml|png.
   static const String _androidIconName = 'ic_notification_rise_vector';
+
+  // Fallbacks tried, in order, if the preferred icon is rejected.
+  static const List<String> _androidIconFallbacks = <String>[
+    'ic_launcher',
+    'app_icon',
+    'ic_stat_icon',
+  ];
+
   static const String _androidRawSoundName = 'a';
   static const String _iosSoundName = 'a.mp3';
 
@@ -52,14 +63,6 @@ class NotificationService {
 
   /// Public helper for `main()` so the Android notification *categories*
   /// (channels) exist before the user ever opens Settings.
-  ///
-  /// ```dart
-  /// void main() async {
-  ///   WidgetsFlutterBinding.ensureInitialized();
-  ///   await NotificationService.ensureChannels();
-  ///   runApp(const MyApp());
-  /// }
-  /// ```
   static Future<void> ensureChannels() async {
     try {
       await initialize();
@@ -73,27 +76,12 @@ class NotificationService {
       tz_data.initializeTimeZones();
       tz.setLocalLocation(tz.getLocation('Africa/Addis_Ababa'));
 
-      // Reset any stale error from a previous, failed attempt.
       _lastError = null;
 
-      const settings = InitializationSettings(
-        // AndroidInitializationSettings expects a drawable resource name,
-        // without an @drawable/ prefix.
-        android: AndroidInitializationSettings(_androidIconName),
-        iOS: DarwinInitializationSettings(
-          requestAlertPermission: false,
-          requestBadgePermission: false,
-          requestSoundPermission: false,
-        ),
-      );
-
-      await _plugin.initialize(
-        settings,
-        onDidReceiveNotificationResponse: (response) {
-          final index = _parsePrayerIndex(response.payload ?? '');
-          if (index != null) onPrayerNotificationTap?.call(index);
-        },
-      );
+      // Resolve the notification icon: try the custom one, fall back to
+      // well-known names. Each attempt uses a fresh plugin instance because
+      // the plugin caches `_initialized = true` before the native call.
+      await _initializePluginWithIconFallback();
 
       final android = _androidPlugin;
 
@@ -110,14 +98,55 @@ class NotificationService {
       }
 
       _initialized = true;
-      // Do NOT clear _lastError here — channel creation may have set a
-      // warning that the caller should be able to read.
     } catch (error) {
       _initialized = false;
       _notificationsEnabled = false;
       _lastError = 'Notification setup failed: $error';
       rethrow;
     }
+  }
+
+  /// Tries [_androidIconName] first, then each of [_androidIconFallbacks].
+  /// The first icon Android accepts becomes the active configuration.
+  static Future<void> _initializePluginWithIconFallback() async {
+    final candidates = <String>[_androidIconName, ..._androidIconFallbacks];
+    Object? lastError;
+
+    for (final icon in candidates) {
+      final candidate = FlutterLocalNotificationsPlugin();
+      try {
+        await candidate.initialize(
+          InitializationSettings(
+            android: AndroidInitializationSettings(icon),
+            iOS: const DarwinInitializationSettings(
+              requestAlertPermission: false,
+              requestBadgePermission: false,
+              requestSoundPermission: false,
+            ),
+          ),
+          onDidReceiveNotificationResponse: (response) {
+            final index = _parsePrayerIndex(response.payload ?? '');
+            if (index != null) onPrayerNotificationTap?.call(index);
+          },
+        );
+
+        _plugin = candidate;
+
+        if (icon != _androidIconName) {
+          _lastError =
+              'Notification icon "$_androidIconName" not found; '
+              'using "$icon" instead. Add '
+              'android/app/src/main/res/drawable/$_androidIconName.xml '
+              'to restore the custom icon.';
+        }
+        return;
+      } catch (error) {
+        lastError = error;
+        debugPrint('Notification icon "$icon" rejected: $error');
+      }
+    }
+
+    throw lastError ?? StateError('No usable notification icon found');
   }
 
   static AndroidFlutterLocalNotificationsPlugin? get _androidPlugin => _plugin
@@ -149,13 +178,10 @@ class NotificationService {
           return false;
         }
         if (requestExactAlarms) {
-          // Exact alarms are optional: reminders fall back to inexact alarms
-          // if Android does not grant this special access.
           try {
             await android.requestExactAlarmsPermission();
           } catch (_) {
-            // Keep notification permission successful; scheduling handles
-            // exact-alarm denial by using an inexact alarm.
+            // Exact alarms are optional; scheduling falls back to inexact.
           }
         }
       } else {
@@ -220,13 +246,18 @@ class NotificationService {
     }
   }
 
+  /// Override the package name used when opening the system notification
+  /// settings screen. Set this in `main()` if your `applicationId` differs
+  /// from the default in `android/app/build.gradle`.
+  static String androidPackageName = 'com.example.thelot_2';
+
   static Future<bool> openNotificationSettings() async {
     if (defaultTargetPlatform != TargetPlatform.android) return false;
     try {
-      const intent = AndroidIntent(
+      final intent = AndroidIntent(
         action: 'android.settings.APP_NOTIFICATION_SETTINGS',
         arguments: <String, dynamic>{
-          'android.provider.extra.APP_PACKAGE': 'com.example.thelot_2',
+          'android.provider.extra.APP_PACKAGE': androidPackageName,
         },
       );
       await intent.launch();
@@ -345,7 +376,6 @@ class NotificationService {
     required bool vibrationEnabled,
     required bool soundEnabled,
   }) {
-    // Only attach the custom sound if we know the raw resource is usable.
     final useCustomSound = soundEnabled && _customSoundAvailable;
     return NotificationDetails(
       android: AndroidNotificationDetails(
@@ -446,9 +476,6 @@ class NotificationService {
     try {
       await android.createNotificationChannel(channel);
     } catch (error) {
-      // Missing sound resource is the most common cause here. If the channel
-      // asked for a custom sound, retry once without it so the category is
-      // still registered with the system.
       if (channel.sound != null) {
         _customSoundAvailable = false;
         try {
