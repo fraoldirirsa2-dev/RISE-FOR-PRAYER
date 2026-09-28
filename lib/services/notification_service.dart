@@ -19,11 +19,22 @@ class NotificationService {
   static String? _lastError;
   static int? _launchPrayerIndex;
 
+  /// Whether the Android raw sound resource (`res/raw/a.*`) could be used.
+  /// If `false`, notifications are posted without a custom sound so posting
+  /// never fails on devices/builds where the resource is missing.
+  static bool _customSoundAvailable = true;
+
   static bool get isInitialized => _initialized;
   static bool get isAvailable => _initialized && _notificationsEnabled;
   static bool get notificationsEnabled => _notificationsEnabled;
   static String? get lastError => _lastError;
   static void Function(int prayerIndex)? onPrayerNotificationTap;
+
+  // Keep these strings in one place so they line up with the Android
+  // resources: res/drawable/ic_notification_rise_vector.* and res/raw/a.*.
+  static const String _androidIconName = 'ic_notification_rise_vector';
+  static const String _androidRawSoundName = 'a';
+  static const String _iosSoundName = 'a.mp3';
 
   static const String _soundVibrateChannel = 'prayer_reminders_sound_vibrate_a';
   static const String _soundSilentChannel = 'prayer_reminders_sound_silent_a';
@@ -39,16 +50,36 @@ class NotificationService {
     });
   }
 
+  /// Public helper for `main()` so the Android notification *categories*
+  /// (channels) exist before the user ever opens Settings.
+  ///
+  /// ```dart
+  /// void main() async {
+  ///   WidgetsFlutterBinding.ensureInitialized();
+  ///   await NotificationService.ensureChannels();
+  ///   runApp(const MyApp());
+  /// }
+  /// ```
+  static Future<void> ensureChannels() async {
+    try {
+      await initialize();
+    } catch (_) {
+      // Never block app startup because of notifications.
+    }
+  }
+
   static Future<void> _initialize() async {
     try {
       tz_data.initializeTimeZones();
       tz.setLocalLocation(tz.getLocation('Africa/Addis_Ababa'));
 
+      // Reset any stale error from a previous, failed attempt.
+      _lastError = null;
+
       const settings = InitializationSettings(
         // AndroidInitializationSettings expects a drawable resource name,
-        // without an @drawable/ prefix. Keep this aligned with the Android
-        // notification drawable (also used by older installed builds).
-        android: AndroidInitializationSettings('ic_notification_rise_vector'),
+        // without an @drawable/ prefix.
+        android: AndroidInitializationSettings(_androidIconName),
         iOS: DarwinInitializationSettings(
           requestAlertPermission: false,
           requestBadgePermission: false,
@@ -65,8 +96,11 @@ class NotificationService {
       );
 
       final android = _androidPlugin;
+
+      // Create channels *before* reading permission status so a partial
+      // failure can be recorded in `_lastError` and not wiped out.
       await _createChannels(android);
-      await _readNotificationStatus(android);
+      await _readNotificationStatus(android, clearError: false);
 
       final launchDetails = await _plugin.getNotificationAppLaunchDetails();
       final launchResponse = launchDetails?.notificationResponse;
@@ -76,7 +110,8 @@ class NotificationService {
       }
 
       _initialized = true;
-      _lastError = null;
+      // Do NOT clear _lastError here — channel creation may have set a
+      // warning that the caller should be able to read.
     } catch (error) {
       _initialized = false;
       _notificationsEnabled = false;
@@ -161,14 +196,17 @@ class NotificationService {
   }
 
   static Future<void> _readNotificationStatus(
-    AndroidFlutterLocalNotificationsPlugin? android,
-  ) async {
+    AndroidFlutterLocalNotificationsPlugin? android, {
+    bool clearError = true,
+  }) async {
     if (android == null) {
       _notificationsEnabled = true;
     } else {
       _notificationsEnabled = await android.areNotificationsEnabled() ?? false;
     }
-    if (_notificationsEnabled && _initialized) _lastError = null;
+    if (clearError && _notificationsEnabled && _initialized) {
+      _lastError = null;
+    }
   }
 
   static Future<bool> _ensureInitialized() async {
@@ -307,6 +345,8 @@ class NotificationService {
     required bool vibrationEnabled,
     required bool soundEnabled,
   }) {
+    // Only attach the custom sound if we know the raw resource is usable.
+    final useCustomSound = soundEnabled && _customSoundAvailable;
     return NotificationDetails(
       android: AndroidNotificationDetails(
         _channelId(
@@ -319,14 +359,14 @@ class NotificationService {
         priority: Priority.high,
         enableVibration: vibrationEnabled,
         playSound: soundEnabled,
-        sound: soundEnabled
-            ? const RawResourceAndroidNotificationSound('a')
+        sound: useCustomSound
+            ? const RawResourceAndroidNotificationSound(_androidRawSoundName)
             : null,
       ),
       iOS: DarwinNotificationDetails(
         categoryIdentifier: 'prayer_reminder',
         presentSound: soundEnabled,
-        sound: soundEnabled ? 'a.mp3' : null,
+        sound: soundEnabled ? _iosSoundName : null,
       ),
     );
   }
@@ -352,7 +392,8 @@ class NotificationService {
     AndroidFlutterLocalNotificationsPlugin? android,
   ) async {
     if (android == null) return;
-    const channels = <AndroidNotificationChannel>[
+
+    final channels = <AndroidNotificationChannel>[
       AndroidNotificationChannel(
         _soundVibrateChannel,
         'Prayer Reminders',
@@ -360,7 +401,9 @@ class NotificationService {
         importance: Importance.high,
         playSound: true,
         enableVibration: true,
-        sound: RawResourceAndroidNotificationSound('a'),
+        sound: _customSoundAvailable
+            ? const RawResourceAndroidNotificationSound(_androidRawSoundName)
+            : null,
       ),
       AndroidNotificationChannel(
         _soundSilentChannel,
@@ -369,9 +412,11 @@ class NotificationService {
         importance: Importance.high,
         playSound: true,
         enableVibration: false,
-        sound: RawResourceAndroidNotificationSound('a'),
+        sound: _customSoundAvailable
+            ? const RawResourceAndroidNotificationSound(_androidRawSoundName)
+            : null,
       ),
-      AndroidNotificationChannel(
+      const AndroidNotificationChannel(
         _silentVibrateChannel,
         'Prayer Reminders (Vibration Only)',
         description: 'Prayer reminders with vibration and no sound',
@@ -379,7 +424,7 @@ class NotificationService {
         playSound: false,
         enableVibration: true,
       ),
-      AndroidNotificationChannel(
+      const AndroidNotificationChannel(
         _silentChannel,
         'Prayer Reminders (Silent)',
         description: 'Silent prayer reminders',
@@ -388,8 +433,45 @@ class NotificationService {
         enableVibration: false,
       ),
     ];
+
     for (final channel in channels) {
+      await _createSingleChannel(android, channel);
+    }
+  }
+
+  static Future<void> _createSingleChannel(
+    AndroidFlutterLocalNotificationsPlugin android,
+    AndroidNotificationChannel channel,
+  ) async {
+    try {
       await android.createNotificationChannel(channel);
+    } catch (error) {
+      // Missing sound resource is the most common cause here. If the channel
+      // asked for a custom sound, retry once without it so the category is
+      // still registered with the system.
+      if (channel.sound != null) {
+        _customSoundAvailable = false;
+        try {
+          await android.createNotificationChannel(
+            AndroidNotificationChannel(
+              channel.id,
+              channel.name,
+              description: channel.description,
+              importance: channel.importance,
+              playSound: channel.playSound,
+              enableVibration: channel.enableVibration,
+            ),
+          );
+          _lastError =
+              'Reminder sound resource "$_androidRawSoundName" is missing; '
+              'reminders will play the default sound instead.';
+          return;
+        } catch (_) {
+          // Fall through to the generic error below.
+        }
+      }
+      _lastError =
+          'Notification channel "${channel.id}" could not be created: $error';
     }
   }
 

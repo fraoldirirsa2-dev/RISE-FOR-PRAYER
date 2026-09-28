@@ -1,19 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:rise_for_prayer/app/app.dart';
 import 'package:rise_for_prayer/services/notification_service.dart';
 
-void main() async {
+/// Pushes the prayer-session route for a tapped reminder.
+///
+/// Shared by both entry points:
+///  * [NotificationService.onPrayerNotificationTap] – app already running.
+///  * [NotificationService.consumeLaunchPrayerIndex] – app launched cold
+///    from a notification.
+void _openPrayerSession(int prayerIndex) {
+  appNavigatorKey.currentState?.pushNamed(
+    '/prayer-session',
+    arguments: {'day': DateTime.now().weekday - 1, 'hour': prayerIndex},
+  );
+}
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  NotificationService.onPrayerNotificationTap = (index) {
-    appNavigatorKey.currentState?.pushNamed(
-      '/prayer-session',
-      arguments: {'day': DateTime.now().weekday - 1, 'hour': index},
-    );
-  };
+  // Handle notification taps while the app is already running.
+  NotificationService.onPrayerNotificationTap = _openPrayerSession;
 
+  // Android system-bar appearance.
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -23,23 +34,28 @@ void main() async {
     ),
   );
 
+  // Initialize notifications before starting the application. This also
+  // creates the Android notification channels, so the "Categories" list in
+  // Settings → Notifications is populated as soon as the app first launches.
   try {
     await NotificationService.initialize();
-  } catch (_) {
-    // Notifications are optional; the app must still start if the platform
-    // plugin or permission flow is unavailable.
+  } catch (error) {
+    debugPrint('Notification initialization failed: $error');
   }
 
   runApp(const ProviderScope(child: RiseForPrayerApp()));
-  // A cold-start notification is received before MaterialApp has a mounted
-  // Navigator. Deliver it after the first frame instead of dropping the tap.
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    final index = NotificationService.consumeLaunchPrayerIndex();
-    if (index != null) {
-      appNavigatorKey.currentState?.pushNamed(
-        '/prayer-session',
-        arguments: {'day': DateTime.now().weekday - 1, 'hour': index},
-      );
+
+  // Run after MaterialApp/Navigator has been mounted.
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    // Ask Android for notification permission.
+    try {
+      await NotificationService.requestPermission(requestExactAlarms: false);
+    } catch (error) {
+      debugPrint('Notification permission request failed: $error');
     }
+
+    // Handle a notification that launched the app.
+    final index = NotificationService.consumeLaunchPrayerIndex();
+    if (index != null) _openPrayerSession(index);
   });
 }
