@@ -28,8 +28,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-        // Enable core library desugaring for flutter_local_notifications
-        isCoreLibraryDesugaringEnabled = true   // ✅ Kotlin DSL
+        // Required by flutter_local_notifications for java.time on older Android.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
@@ -54,6 +54,14 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
+
+            // Keep R8 from stripping plugin classes that are used via reflection.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }
@@ -68,7 +76,6 @@ flutter {
     source = "../.."
 }
 
-// Add the desugaring library dependency
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 }
