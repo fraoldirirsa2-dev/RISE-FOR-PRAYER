@@ -5,14 +5,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rise_for_prayer/app/app.dart';
 import 'package:rise_for_prayer/services/notification_service.dart';
 
-/// Pushes the prayer-session route for a tapped reminder.
-///
-/// Shared by both entry points:
-///  * [NotificationService.onPrayerNotificationTap] – app already running.
-///  * [NotificationService.consumeLaunchPrayerIndex] – app launched cold
-///    from a notification.
 void _openPrayerSession(int prayerIndex) {
-  appNavigatorKey.currentState?.pushNamed(
+  final navigator = appNavigatorKey.currentState;
+
+  if (navigator == null) {
+    debugPrint('Prayer navigation skipped: Navigator is not ready.');
+    return;
+  }
+
+  navigator.pushNamed(
     '/prayer-session',
     arguments: {'day': DateTime.now().weekday - 1, 'hour': prayerIndex},
   );
@@ -21,10 +22,8 @@ void _openPrayerSession(int prayerIndex) {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Handle notification taps while the app is already running.
   NotificationService.onPrayerNotificationTap = _openPrayerSession;
 
-  // Android system-bar appearance.
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -34,28 +33,40 @@ Future<void> main() async {
     ),
   );
 
-  // Initialize notifications before starting the application. This also
-  // creates the Android notification channels, so the "Categories" list in
-  // Settings → Notifications is populated as soon as the app first launches.
   try {
     await NotificationService.initialize();
-  } catch (error) {
+
+    debugPrint('NotificationService initialized.');
+  } catch (error, stackTrace) {
     debugPrint('Notification initialization failed: $error');
+    debugPrintStack(stackTrace: stackTrace);
   }
 
   runApp(const ProviderScope(child: RiseForPrayerApp()));
 
-  // Run after MaterialApp/Navigator has been mounted.
   WidgetsBinding.instance.addPostFrameCallback((_) async {
-    // Ask Android for notification permission.
     try {
-      await NotificationService.requestPermission(requestExactAlarms: false);
-    } catch (error) {
+      final enabled = await NotificationService.requestPermissions(
+        requestExactAlarms: false,
+      );
+
+      debugPrint('Notification permission: $enabled');
+
+      final current =
+          await NotificationService.refreshNotificationPermissionStatus();
+
+      debugPrint('Notifications currently enabled: $current');
+    } catch (error, stackTrace) {
       debugPrint('Notification permission request failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
     }
 
-    // Handle a notification that launched the app.
-    final index = NotificationService.consumeLaunchPrayerIndex();
-    if (index != null) _openPrayerSession(index);
+    final launchIndex = NotificationService.consumeLaunchPrayerIndex();
+
+    if (launchIndex != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _openPrayerSession(launchIndex);
+      });
+    }
   });
 }
