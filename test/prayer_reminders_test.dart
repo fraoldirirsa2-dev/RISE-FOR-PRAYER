@@ -32,11 +32,17 @@ void main() {
     final iconFile = File(
       'android/app/src/main/res/drawable/ic_notification.xml',
     );
+    final keepFile = File('android/app/src/main/res/raw/keep.xml');
 
     expect(
       iconFile.existsSync(),
       isTrue,
       reason: 'The Android notification icon resource must exist.',
+    );
+    expect(
+      keepFile.readAsStringSync(),
+      contains('@drawable/ic_notification'),
+      reason: 'Resource shrinking must preserve the runtime-loaded icon.',
     );
     expect(NotificationService.androidNotificationIconName, 'ic_notification');
   });
