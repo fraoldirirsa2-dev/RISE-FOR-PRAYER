@@ -31,5 +31,7 @@ void main() {
     );
 
     expect(find.text('Next Prayer Hour'), findsOneWidget);
+    expect(find.text('Starts in'), findsOneWidget);
+    expect(find.text('View Next Prayer'), findsOneWidget);
   });
 }

@@ -9,7 +9,24 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('Settings exposes only Light and Dark appearance choices', (
+  test(
+    'defaults fresh installs to Amharic and preserves saved English',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final freshSettings = SettingsProvider();
+      await Future<void>.delayed(Duration.zero);
+      expect(freshSettings.language, 'eth');
+      freshSettings.dispose();
+
+      SharedPreferences.setMockInitialValues({'language': 'en'});
+      final existingSettings = SettingsProvider();
+      await Future<void>.delayed(Duration.zero);
+      expect(existingSettings.language, 'en');
+      existingSettings.dispose();
+    },
+  );
+
+  testWidgets('Settings shows localized appearance choices by default', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
@@ -25,8 +42,8 @@ void main() {
 
     expect(find.text('Both'), findsNothing);
     expect(find.text('Night Mode'), findsNothing);
-    expect(find.text('Light'), findsOneWidget);
-    expect(find.text('Dark'), findsOneWidget);
+    expect(find.text('ብርሃን'), findsOneWidget);
+    expect(find.text('ጨለማ'), findsOneWidget);
     expect(find.text('System'), findsNothing);
     expect(find.text('Automatic'), findsNothing);
   });

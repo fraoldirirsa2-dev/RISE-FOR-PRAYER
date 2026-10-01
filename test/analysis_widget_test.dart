@@ -33,7 +33,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('1 / 7'), findsOneWidget);
-    expect(find.text('14.29%'), findsWidgets);
+    expect(find.text('14%'), findsWidgets);
 
     await tester.tap(find.text('30D'));
     await tester.pump();

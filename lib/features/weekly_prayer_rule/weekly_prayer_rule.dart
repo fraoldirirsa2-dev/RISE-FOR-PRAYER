@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:rise_for_prayer/data/prayer_content.dart';
 import 'package:rise_for_prayer/features/bible/models/bible_models.dart';
 import 'package:rise_for_prayer/features/bible/repositories/bible_repository.dart';
 import 'package:rise_for_prayer/providers/app_providers.dart';
@@ -38,14 +39,20 @@ class WeeklyPrayerRuleReading extends StatelessWidget {
     required this.day,
     required this.hour,
     this.language = 'en',
+    this.metaniaEnabled = true,
   });
   final int day;
   final int hour;
   final String language;
+  final bool metaniaEnabled;
 
   @override
   Widget build(BuildContext context) {
     final item = weeklyPrayerRule[day][hour];
+    final psalmChapters = [
+      ...item.psalmChapters,
+      ...item.midnightPsalmChapters,
+    ];
     final colors = Theme.of(context).colorScheme;
     const textSize = 19.0;
     final amharicStyle = TextStyle(
@@ -91,7 +98,7 @@ class WeeklyPrayerRuleReading extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        block(localizedText(language, 'መክፈቻ ጸሎት', 'Opening prayers'), [
+        block(localizedText(language, 'መክፈቻ ጸሎት', 'Opening Prayer'), [
           _prayerQuote(
             localizedText(language, 'አቡነ ዘበሰማያት', 'Abune Zebesemayat'),
             language == 'eth' ? _common : _commonEnglish,
@@ -105,8 +112,35 @@ class WeeklyPrayerRuleReading extends StatelessWidget {
             prayerTextStyle,
             colors,
           ),
+          if (day == 6 && item.assignment.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            SelectableText(
+              _assignmentLabel(item, day, hour, language),
+              textAlign: TextAlign.start,
+              style: prayerTextStyle,
+            ),
+          ],
+          if (item.special.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            SelectableText(
+              language == 'eth'
+                  ? item.special
+                  : 'Hymn of Praise to Mary for ${_daysEn[day]}',
+              textAlign: TextAlign.start,
+              style: prayerTextStyle,
+            ),
+          ],
         ]),
-        block(localizedText(language, 'የመጽሐፍ ቅዱስ ንባቦች', 'Bible readings'), [
+        if (psalmChapters.isNotEmpty)
+          block(localizedText(language, 'መዝሙረ ዳዊት', 'Psalm'), [
+            for (final chapter in psalmChapters)
+              _PsalmChapterCard(
+                chapter: chapter,
+                language: language,
+                textSize: textSize,
+              ),
+          ]),
+        block(localizedText(language, 'የመጽሐፍ ቅዱስ ንባቦች', 'Bible Reading'), [
           for (final reference in item.readings)
             _BibleReadingCard(
               referenceText: _referenceLabel(
@@ -119,49 +153,20 @@ class WeeklyPrayerRuleReading extends StatelessWidget {
               textSize: textSize,
             ),
         ]),
-        if (item.psalmChapters.isNotEmpty)
-          block(localizedText(language, 'መዝሙረ ዳዊት', 'Psalms'), [
-            for (final chapter in item.psalmChapters)
-              _PsalmChapterCard(
-                chapter: chapter,
-                language: language,
-                textSize: textSize,
-              ),
-          ]),
-        if (item.midnightPsalmChapters.isNotEmpty)
-          block(localizedText(language, 'የእኩለ ሌሊት መዝሙር', 'Midnight Psalms'), [
-            for (final chapter in item.midnightPsalmChapters)
-              _PsalmChapterCard(
-                chapter: chapter,
-                language: language,
-                textSize: textSize,
-              ),
-          ]),
-        block(
-          localizedText(language, 'የሰአቱ የጸሎት ሥርዓት', 'Prayer for this hour'),
-          [
-            if (item.assignment.isNotEmpty)
-              SelectableText(
-                _assignmentLabel(item, day, hour, language),
-                textAlign: TextAlign.start,
-                style: prayerTextStyle,
-              ),
-            if (item.special.isNotEmpty) ...[
-              if (item.assignment.isNotEmpty) const SizedBox(height: 8),
-              SelectableText(
-                language == 'eth'
-                    ? item.special
-                    : 'Hymn of Praise to Mary for ${_daysEn[day]}',
-                textAlign: TextAlign.start,
-                style: prayerTextStyle,
-              ),
-            ],
-          ],
-        ),
+        MetaniaCounter(prayerHourId: hour, enabled: metaniaEnabled),
         block(localizedText(language, 'መዝጊያ ጸሎት', 'Closing prayer'), [
           _prayerQuote(
             localizedText(language, 'አቡነ ዘበሰማያት', 'Abune Zebesemayat'),
-            language == 'eth' ? _common : _commonEnglish,
+            language == 'eth' ? _closingOurFather : _closingOurFatherEnglish,
+            prayerTextStyle,
+            colors,
+          ),
+          const SizedBox(height: 12),
+          _prayerQuote(
+            localizedText(language, 'የማርያም ጸሎት', 'Marian prayer'),
+            language == 'eth'
+                ? _closingMarianPrayer
+                : _closingMarianPrayerEnglish,
             prayerTextStyle,
             colors,
           ),
@@ -293,10 +298,16 @@ final weeklyPrayerRule = List<List<RuleHour>>.generate(
         ? ''
         : 'መዝሙር ${_ranges[d][h]}';
     final dailyPsalms = _dailyPsalmsForHour(d, h);
+    final psalmChapters = dailyPsalms.isNotEmpty
+        ? dailyPsalms
+        : d == 6
+        ? prayerReadings[h].readings
+              .map((reference) => reference.chapter)
+              .toList(growable: false)
+        : dailyPsalms;
     final assignmentText = d < 6
         ? _psalmRangeLabel(dailyPsalms)
         : assignment.toString();
-    final psalmChapters = dailyPsalms;
     final midnightPsalmChapters = h == 6
         ? List<int>.generate(
             _midnightPsalmRanges[d].$2 - _midnightPsalmRanges[d].$1 + 1,
@@ -347,12 +358,6 @@ String _psalmRangeLabel(List<int> chapters) {
 
 String _assignmentLabel(RuleHour item, int day, int hour, String language) {
   if (language == 'eth') return item.assignment;
-  if (item.psalmChapters.isNotEmpty) {
-    final chapters = item.psalmChapters;
-    return chapters.length == 1
-        ? 'Psalm ${chapters.first}'
-        : 'Psalms ${chapters.first}–${chapters.last}';
-  }
   if (day == 6 && hour < 6) {
     const parts = [
       'Prayer of Moses',
@@ -367,14 +372,90 @@ String _assignmentLabel(RuleHour item, int day, int hour, String language) {
   if (day == 6 && hour == 6) {
     return 'Wudase Maryam and Kidase Maryam';
   }
+  if (item.psalmChapters.isNotEmpty) {
+    final chapters = item.psalmChapters;
+    return chapters.length == 1
+        ? 'Psalm ${chapters.first}'
+        : 'Psalms ${chapters.first}–${chapters.last}';
+  }
   if (item.special.isNotEmpty) return 'Hymn of Praise to Mary';
   return '';
 }
 
-const String _commonEnglish =
-    'Our Father in heaven, hallowed be your name. Your kingdom come. Your will be done, on earth as it is in heaven. Give us this day our daily bread. Forgive us our sins, as we forgive those who sin against us. Lead us not into temptation, but deliver us from evil. For yours is the kingdom, the power, and the glory, forever. Amen.';
-const String _marianPrayerEnglish =
-    'Hail Mary, full of grace, the Lord is with you. Blessed are you among women, and blessed is the fruit of your womb, Jesus. Holy Mary, Mother of God, pray for us sinners, now and at the hour of our death. Amen.';
+const String _commonEnglish = '''
+I cross my face and all of myself by the sign of the cross. In the name of father, and son and the Holy Spirit one God AMEN. In the Holy Trinity believing and entrusting myself, I deny you satan in front of my mother the Holy Church, who is my witness, St. Mary Tsion forever. AMEN
+
+We thank you Oh Lord, and we glorify you, we praise. you Oh Lord, and we rely on you, we beg you and we beseech you. We worship you and we serve to your Holy name. We bow and kneel down to you; oh, you to whom all knees should bow and who all tongues serve. You are the God of gods and the Lord of lords and the king of kings. You are God to all flesh and to. all souls, and we call you as your Holy Son taught us saying “But when you pray you shall say”, Our Father who are in heaven …
+
+Our father who art in heaven, hollowed be they name, thy Kingdom come, thy will be done in earth as it is in heaven: give us this day our daily bread and forgive us our trespasses as we forgive them that trespass against us, and lead us not into temptation but deliver us and rescue us from all evil for thine is the kingdom, the power and the. Glory for even and ever. AMEN
+
+By the Salutation of the Saint Angel Gabriel, O my Lady Mary I salute you, thou are Virgin in thought, and Virgin in body the Mother of God Tsabaot. (The Lord of Hosts) salutation to you. Blessed art thou, among women and blessed is the fruit of your womb. Rejoice thou who is hailed, O Graceful God is with you. Beseech and pray for our mercy to you beloved Son JESUS CHRIST that he may forgive us our sins. AMEN
+
+We believe in one God, the father Almighty, maker of heaven and earth, and all things visible and invisible and we believe in One Lord Jesus Christ the only begotten son of the Father who was with him before the creation of the World.
+
+Light from light, true God from true God, begotten not made of one essense with the Father. By whom all things were made, and without him was not anything in heaven or earth made.
+
+Who for us men and for our salvation came down from heaven was made man and was incarnate from the Holy Spirit and from the Holy Virgin Mary. Become man was crucified for our sakes in the days of Pontius Pilate suffered, died, was buried and rose from the dead on the third day as was written in the Holy Scriptures: Ascended in glory into heaven, sat at the right hand of his Father, and will come again in glory to judge the Living and the dead; there is no end to his reign.
+
+And we believe in the Holy Spirit, the life-giving God, who proceeded from the Father; we worship and glorify him with the Father, and the Son; who spoke by the prophets.
+
+And we believe in one baptism from the remission of sins, and walt for the resurrection from the dead and the life to come, world without end, AMEN.
+
+Holy, Holy, Holy God Tsabaot perfect Lord of Host, heaven and earth are full of the holiness of your Glory. We bow to you Christ, with your good heavenly Father and with your Holy Spirits the life Giver from thou didst come and save us.
+
+Let us bow down to the father, and the Son, and the Holy Spirit: Three in one and one in three. Three in person and united in Godhead. I bow down to our Lady St. Mary Virgin Mother God. I bow down to the cross of our Lord Jesus Christ which was sanctified by his precious Blood. The cross is our power, the Cross is our strength, the Cross is our redemption, the cross is the salvation of our soul. The Jews denied but we believe, and those who believe in the power of the Cross are saved.
+
+Glory To The Father, Glory To The Son, Glory To The Holy Spirit (Three Times). Glory to our Lady St. Mary the Virgin Mother of God. Glory to the Cross of our Lord Jesus Christ. May Christ in his mercy remember us. May he not put us to shame in his second coming. May he awaken us to the glorification of his name. In his worship may he maintain us. Our Lady St. Mary, lift up our prayer before the throne of our Lord, who gave us to eat this bread, and who gave us to drink this cup, and who prepared our food and our clothing for us, and who overlooked all our sins, and who gave us his Holy Body and his precious Blood, who brought us to this hour.
+
+Let us give glory and thanks of God the Most High and to his Virgin Mother and to his precious Cross. May the name of the Lord be thanked and glorified always at all times and at every hour.
+''';
+const String _marianPrayerEnglish = '''
+By the Salutation of the Saint Angel Gabriel, O my Lady Mary I salute you, thou are Virgin in thought, and Virgin in body the Mother of God Tsabaot. (The Lord of Hosts) salutation to you. Blessed art thou, among women and blessed is the fruit of your womb. Rejoice thou who is hailed, O Graceful God is with you. Beseech and pray for our mercy to you beloved Son JESUS CHRIST that he may forgive us our sins. AMEN
+''';
+
+const String _common = '''
+በጌታዬ በኢየሱስ ክርስቶስ ትዕምርተ መስቀል ፊቴንና መላ ሰውነቴን ሦስት ጊዜ አማትባለሁ፡፡ አንድ አምላክ በሆኑ በአብ በወልድ በመንፈስ ቅዱስ ስም ንጹሕ ልዩ ክቡር ጽሩይ በሆኑ በሦስትነት ወይም በሥላሴ እያመንኩና እየተማጸንኩ ጠላቴ ሰይጣንን እክድሃለሁ፤ በዚህች በእናቴ በቤተ ክርስቲያን ፊት ቁሜ እክድሃለሁ ለዚህም ምስክሬ ማርያም ናት። በዚህም ዓለም በወዲያኛውም ዓለም እሷን አምባ መጠጊያ አድርጌ እክድሃለሁ።
+
+አቤቱ እናመሰግንሃለን አቤቱ እናከብርሃለን አቤቱ እንገዛልሃለን አቤቱ ቅዱስ ስምህን እናመሰግንሃለን። ጉልበት ሁሉ የሚሰግድልህ አቤቱ እንሰግድልሃለን አንደበትም ሁሉ ለአንተ ይገዛል የአምላኮች አምላክ፣ የጌቶች ጌታ፣የንጉሦችም ንጉሥ አንተ ነህ የሥጋም የነፍስም ፈጣሪ አንተ ነህ። እናንተስ በምትጸልዩበት ጊዜ እንዲህ ብላችሁ ጸልዩ ብሎ ቅዱስ ልጅህ እንዳስተማረን እንጠራሃለን።
+
+አባታችን ሆይ በሰማያት የምትኖር ስምህ ይቀደስ መንግሥትህ ትምጣ ፈቃድህ በሰማይ እንደሆነች እንዲሁም በምድር ትሁን የዕለት እንጀራችንን ስጠን ዛሬ፤በደላችንንም ይቅር በለን እኛም የበደሉንን ይቅር እንደምንል። አቤቱ ወደ ፈተናም አታግባን ከክፉ ሁሉ አድነን እንጂ መንግሥት የአንተ ናትና ኃይል ክብር ምስጋና ለዘለዓለሙ አሜን።
+
+እመቤታችን ቅድስት ድንግል ማርያም ሆይ በመልአኩ በቅዱስ ገብርኤል ሰላምታ ሰላም እልሻለሁ። በሀሳብሽ ድንግል ነሽ በሥጋሽም ድንግል ነሽ። የአቸናፊ የእግዚአብሔር እናት ሆይ ለአንቺ ሰላምታ ይገባል ከሴቶቹ ሁሉ ተለይተሽ አንቺ የተባረክሽ ነሽና የማኅፀንሽም ፍሬ የተባረከ ነው። ጸጋን የተመላሽ ሆይ ደስ ይበልሽ እግዚአብሔር ከአንቺ ጋር ነውና ከተወደደው ልጅሽ ከጌታችን ከመድኃኒታችን ከኢየሱስ ክርስቶስ ዘንድ ይቅርታንና ምሕረትን ለምኝልን ኃጢአታችንንም ያስተሠርይልን ዘንድ ለዘለዓለሙ አሜን።
+
+ሁሉን የፈጠረ አንድ አምላክ በሚሆን በእግዚአብሔር አብ እናምናለን። ሰማይንና ምድርን የፈጠረ የሚታየውንና የማይታየውን። ዓለም ሳይፈጠር ከእርሱ ጋር በነበረ አንድ የአብ ልጅ በሚሆን በአንድ ጌታ በኢየሱስ ክርስቶስ እናምናለን ከብርሃን የተገኘ ብርሃን ከእውነተኛ አምላክ የተገኘ አምላክ። የተወለደ እንጂ ያልተፈጠረ በባሕርዩ ከአብ ጋር የሚተካከል ሁሉ በእርሱ የሆነ በሰማይም ካለው በምድርም ካለው ያለ እርሱ ምንም ምን የሆነ የለም።
+
+ስለእኛ ስለ ሰዎች እኛን ለማዳን ከሰማይ ወረደ፤ በመንፈስ ቅዱስ ግብር ከቅድስት ድንግል ማርያም ፍጹም ሰው ሆነ ደግሞም ስለእኛ ተሰቀለ በጰንጤናዊ በጲላጦስ ዘመን እርሱ መከራን ተቀበለ፣ሞተ፣ተቀበረ፤በሦስተኛውም ቀን ከሙታን ተለይቶ ተነሳ፤ በቅዱሳት መጻሕፍት እንደተጻፈ በክብር በምስጋና ወደ ሰማይ ዐረገ በአባቱም ቀኝ ተቀመጠ፤ዳግመኛም በሕያዋንና በሙታን ላይ ለመፍረድ በምስጋና ይመጣል፤ለመንግሥቱም ፍጻሜ የለውም።
+
+በመንፈስ ቅዱስም እናምናለን እርሱም ጌታ ሕይወትን የሚሰጥ ከአብ የሠረፀ ከአብና ከወልድ ጋራ በአንድነት እንሰግድለታለን እናመሰግነዋለን እርሱም በነቢያት አድሮ የተናገረ ነው፤ከሁሉም በላይ በምትሆን ሐዋርያት በሠሯት በአንዲት ቅድስት ቤተ ክርስቲያን እናምናለን፤ ኃጢአት በሚሠረይባት በአንዲት ጥምቀትም እናምናለን፤ የሙታንንም መነሣት ተስፋ እናደርጋለን፤የሚመጣውንም ሕይወት ለዘለዓለሙ አሜን።
+
+አቸናፊ እግዚአብሔር ሆይ ቅዱስ ቅዱስ ቅዱስ ተብለህ ትመሰገናለህ። ምስጋናህም በሰማይና በምድር የመላ ነው። ክርስቶስ ለአንተ እንሰግድልሃለን ከሰማያዊ ከቸር አባትህ ጋራ አዳኝ ከሆነ ከመንፈስ ቅዱስም ጋራ እንሰግድልሃለን ወደዚህ ዓለም መጥተህ አድነኸናልና።
+
+ለአብ ለወልድ ለመንፈስ ቅዱስ አንዲት ስግደት እሰግዳለሁ (3 ጊዜ) አንድ ሲሆን ሦስት፤ሦስት ሲሆኑ አንድ፤ በአካል ሦስት ሲሆኑ በመለኮት አንድ ለሚሆኑ እሰግዳለሁ። አምላክን ለወለደች ለእመቤታችን ለድንግል ማርያም እሰግዳለሁ፤ዓለምን ሁሉ ለማዳን ሲል ኢየሱስ ክርስቶስ ለተሰቀለበት መስቀልም እሰግዳለሁ። መስቀል ኃይላችን ነው፤ ኃይላችን መስቀል ነው፤ የሚያጸናን መስቀል ነው፤ መስቀል ቤዛችን ነው፤መስቀል የነፍሳችን መዳኛ ነው። አይሁድ ይክዱታል እኛ ግን እናምነዋል ያመነው እኛም በመስቀሉ እንድናለን ድነናልም።
+
+ለአብ ምስጋና ይገባል ለወልድም ምስጋና ይገባል ለመንፈስ ቅዱስም ምስጋና ይገባል (3 ጊዜ) አምላክን ለወለደች ለእመቤታችን ለድንግል ማርያም ምስጋና ይገባል፤ለኢየሱስ ክርስቶስ መስቀልም ምስጋና ይገባል። ክርስቶስ በቸርነቱ ያስበን ዘንድ ዳግመኛም በመጣ ጊዜ እንዳያሳፍረን ስሙን ለማመስገን ያነቃን ዘንድ።
+
+እርሱንም በማምለክ ያፀናን ዘንድ። እመቤታችን ጸሎታችንን አሳርጊልን ኃጢአታችንንም አስተሥርዪልን በጌታችን መንበር ፊት ጸሎታችንን አሳርጊልን ይህንን ኅብስት ላበላን ይህንንም ጽዋ ላጠጣን ምግባችንንና ልብሳችንንም ላዘጋጀልን ፤ ኃጢአታችንንም ሁሉ ለታገሰልን ፤ ክቡር ደሙን ቅዱስ ሥጋውን ለሰጠን ፤ እስከዚህችም ሰዓት ላደረሰን፤ ለእርሱ ለልዑል እግዚአብሔር ፍጹም ምስጋና ይገባል ለወለደችው ለድንግልም ምስጋና ይገባል። ለክቡር መስቀሉም ምስጋና ይገባል። የእግዚአብሔር ስሙ ፈጽሞ ይመሰገን ዘንድ ዘወትር በየጊዜያቱና በየሰዓቱ ምስጋና ይገባል።
+''';
+
+const String _marianPrayer = '''
+እመቤታችን ቅድስት ድንግል ማርያም ሆይ በመልአኩ በቅዱስ ገብርኤል ሰላምታ ሰላም እልሻለሁ። በሀሳብሽ ድንግል ነሽ በሥጋሽም ድንግል ነሽ። የአቸናፊ የእግዚአብሔር እናት ሆይ ለአንቺ ሰላምታ ይገባል ከሴቶቹ ሁሉ ተለይተሽ አንቺ የተባረክሽ ነሽና የማኅፀንሽም ፍሬ የተባረከ ነው። ጸጋን የተመላሽ ሆይ ደስ ይበልሽ እግዚአብሔር ከአንቺ ጋር ነውና ከተወደደው ልጅሽ ከጌታችን ከመድኃኒታችን ከኢየሱስ ክርስቶስ ዘንድ ይቅርታንና ምሕረትን ለምኝልን ኃጢአታችንንም ያስተሠርይልን ዘንድ ለዘለዓለሙ አሜን።
+''';
+
+const String _closingOurFather = '''
+አባታችን ሆይ በሰማያት የምትኖር ስምህ ይቀደስ መንግሥትህ ትምጣ ፈቃድህ በሰማይ እንደሆነች እንዲሁም በምድር ትሁን የዕለት እንጀራችንን ስጠን ዛሬ፤በደላችንንም ይቅር በለን እኛም የበደሉንን ይቅር እንደምንል። አቤቱ ወደ ፈተናም አታግባን ከክፉ ሁሉ አድነን እንጂ መንግሥት የአንተ ናትና ኃይል ክብር ምስጋና ለዘለዓለሙ አሜን።
+''';
+
+const String _closingMarianPrayer = '''
+እመቤታችን ቅድስት ድንግል ማርያም ሆይ በመልአኩ በቅዱስ ገብርኤል ሰላምታ ሰላም እልሻለሁ። በሀሳብሽ ድንግል ነሽ በሥጋሽም ድንግል ነሽ። የአቸናፊ የእግዚአብሔር እናት ሆይ ለአንቺ ሰላምታ ይገባል ከሴቶቹ ሁሉ ተለይተሽ አንቺ የተባረክሽ ነሽና የማኅፀንሽም ፍሬ የተባረከ ነው። ጸጋን የተመላሽ ሆይ ደስ ይበልሽ እግዚአብሔር ከአንቺ ጋር ነውና ከተወደደው ልጅሽ ከጌታችን ከመድኃኒታችን ከኢየሱስ ክርስቶስ ዘንድ ይቅርታንና ምሕረትን ለምኝልን ኃጢአታችንንም ያስተሠርይልን ዘንድ ለዘለዓለሙ አሜን።
+''';
+
+const String _closingOurFatherEnglish = '''
+Our father who art in heaven, hollowed be they name, thy Kingdom come, thy will be done in earth as it is in heaven: give us this day our daily bread and forgive us our trespasses as we forgive them that trespass against us, and lead us not into temptation but deliver us and rescue us from all evil for thine is the kingdom, the power and the. Glory for even and ever. AMEN
+''';
+
+const String _closingMarianPrayerEnglish = '''
+By the Salutation of the Saint Angel Gabriel, O my Lady Mary I salute you, thou are Virgin in thought, and Virgin in body the Mother of God Tsabaot. (The Lord of Hosts) salutation to you. Blessed art thou, among women and blessed is the fruit of your womb. Rejoice thou who is hailed, O Graceful God is with you. Beseech and pray for our mercy to you beloved Son JESUS CHRIST that he may forgive us our sins. AMEN
+''';
 
 String _referenceLabel(
   BibleReference? reference,
@@ -401,11 +482,6 @@ String _referenceLabel(
 
 String _dateKey(DateTime d) =>
     '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-const String _common =
-    '\u{12A0}\u{1263}\u{1273}\u{127D}\u{1295}\u{20}\u{1206}\u{12ED}\u{20}\u{1260}\u{1230}\u{121B}\u{12EB}\u{1275}\u{20}\u{12E8}\u{121D}\u{1275}\u{1296}\u{122D}\n\u{1235}\u{121D}\u{1205}\u{20}\u{12ED}\u{1240}\u{12F0}\u{1235}\n\u{1218}\u{1295}\u{130D}\u{1225}\u{1275}\u{1205}\u{20}\u{1275}\u{121D}\u{1323}\n\u{1348}\u{1243}\u{12F5}\u{1205}\u{20}\u{1260}\u{1230}\u{121B}\u{12ED}\u{20}\u{12A5}\u{1295}\u{12F0}\u{1206}\u{1290}\u{127D}\n\u{12A5}\u{1295}\u{12F2}\u{1201}\u{121D}\u{20}\u{1260}\u{121D}\u{12F5}\u{122D}\u{20}\u{1275}\u{1201}\u{1295}\n\u{12E8}\u{12D5}\u{1208}\u{1275}\u{20}\u{12A5}\u{1295}\u{1300}\u{122B}\u{127D}\u{1295}\u{1295}\u{20}\u{1235}\u{1320}\u{1295}\u{20}\u{12DB}\u{122C}\n\u{1260}\u{12F0}\u{120B}\u{127D}\u{1295}\u{1295}\u{121D}\u{20}\u{12ED}\u{1245}\u{122D}\u{20}\u{1260}\u{1208}\u{1295}\n\u{12A5}\u{129B}\u{121D}\u{20}\u{12E8}\u{1260}\u{12F0}\u{1209}\u{1295}\u{1295}\u{20}\u{12ED}\u{1245}\u{122D}\u{20}\u{12A5}\u{1295}\u{12F0}\u{121D}\u{1295}\u{120D}\n\u{12A0}\u{1264}\u{1271}\u{20}\u{12C8}\u{12F0}\u{20}\u{1348}\u{1270}\u{1293}\u{121D}\u{20}\u{12A0}\u{1273}\u{130D}\u{1263}\u{1295}\n\u{12A8}\u{12AD}\u{1349}\u{20}\u{1201}\u{1209}\u{20}\u{12A0}\u{12F5}\u{1290}\u{1295}\u{20}\u{12A5}\u{1295}\u{1302}\n\u{1218}\u{1295}\u{130D}\u{1225}\u{1275}\u{20}\u{12EB}\u{1295}\u{1270}\u{20}\u{1293}\u{1275}\u{1293}\n\u{1283}\u{12ED}\u{120D}\u{1363}\u{20}\u{12AD}\u{1265}\u{122D}\u{1363}\u{20}\u{121D}\u{1235}\u{130B}\u{1293}\u{121D}\u{20}\u{1208}\u{12D8}\u{120B}\u{1208}\u{1219}\u{20}\u{12A0}\u{121C}\u{1295}';
-
-const String _marianPrayer =
-    '\u{12A5}\u{1218}\u{1264}\u{1274}\u{20}\u{121B}\u{122D}\u{12EB}\u{121D}\u{20}\u{1206}\u{12ED}\u{1363}\n\u{1260}\u{1218}\u{120D}\u{12A0}\u{12A9}\u{20}\u{1260}\u{1245}\u{12F1}\u{1235}\u{20}\u{1308}\u{1265}\u{122D}\u{12A4}\u{120D}\u{20}\u{1230}\u{120B}\u{121D}\u{1273}\u{20}\u{1230}\u{120B}\u{121D}\u{20}\u{12A5}\u{120D}\u{123B}\u{1208}\u{1201}\n\u{1260}\u{1203}\u{1233}\u{1265}\u{123D}\u{20}\u{12F5}\u{1295}\u{130D}\u{120D}\u{20}\u{1290}\u{123D}\n\u{1260}\u{1225}\u{130B}\u{123D}\u{121D}\u{20}\u{12F5}\u{1295}\u{130D}\u{120D}\u{20}\u{1290}\u{123D}\n\u{12E8}\u{12A0}\u{1238}\u{1293}\u{134A}\u{20}\u{12E8}\u{12A5}\u{130D}\u{12DA}\u{12A0}\u{1265}\u{1214}\u{122D}\u{20}\u{12A5}\u{1293}\u{1275}\u{20}\u{1206}\u{12ED}\n\u{120B}\u{1295}\u{127A}\u{20}\u{1230}\u{120B}\u{121D}\u{1273}\u{20}\u{12ED}\u{1308}\u{1263}\u{120D}\n\u{12A8}\u{1234}\u{1276}\u{127D}\u{20}\u{1201}\u{1209}\u{20}\u{1270}\u{1208}\u{12ED}\u{1270}\u{123D}\u{20}\u{12A0}\u{1295}\u{127A}\u{20}\u{12E8}\u{1270}\u{1263}\u{1228}\u{12AD}\u{123D}\u{20}\u{1290}\u{123D}\n\u{12E8}\u{121B}\u{1285}\u{1340}\u{1295}\u{123D}\u{121D}\u{20}\u{134D}\u{122C}\u{20}\u{12E8}\u{1270}\u{1263}\u{1228}\u{12A8}\u{20}\u{1290}\u{12CD}\n\u{1340}\u{130B}\u{1295}\u{20}\u{12E8}\u{1270}\u{1218}\u{120B}\u{123D}\u{20}\u{1206}\u{12ED}\u{20}\u{12F0}\u{1235}\u{20}\u{12ED}\u{1260}\u{120D}\u{123D}\n\u{12A5}\u{130D}\u{12DA}\u{12A0}\u{1265}\u{1214}\u{122D}\u{20}\u{12AB}\u{1295}\u{127A}\u{20}\u{130B}\u{122D}\u{20}\u{1290}\u{12CD}\u{1293}\n\u{12A8}\u{1270}\u{12C8}\u{12F0}\u{12F0}\u{12CD}\u{20}\u{120D}\u{1305}\u{123D}\u{20}\u{12A8}\u{130C}\u{1273}\u{127D}\u{1295}\u{20}\u{12A8}\u{1218}\u{12F5}\u{1283}\u{1292}\u{1273}\u{127D}\u{1295}\u{20}\u{12A8}\u{12A2}\u{12E8}\u{1231}\u{1235}\u{20}\u{12AD}\u{122D}\u{1235}\u{1276}\u{1235}\u{20}\u{12D8}\u{1295}\u{12F5}\n\u{12ED}\u{1245}\u{122D}\u{1273}\u{1295}\u{20}\u{1208}\u{121D}\u{129D}\u{120D}\u{1295}\n\u{1283}\u{1322}\u{12A0}\u{1273}\u{127D}\u{1295}\u{1295}\u{20}\u{12EB}\u{1235}\u{1270}\u{1230}\u{122D}\u{12ED}\u{120D}\u{1295}\u{20}\u{12D8}\u{1295}\u{12F5}\u{20}\u{28}\u{1208}\u{12D8}\u{120B}\u{1208}\u{1219}\u{29}\u{20}\u{12A0}\u{121C}\u{1295}\u{20}\u{3A}\u{3A}';
 
 class WeeklyPrayerRuleScreen extends ConsumerStatefulWidget {
   const WeeklyPrayerRuleScreen({super.key});
@@ -941,7 +1017,7 @@ class _RuleSessionScreenState extends ConsumerState<RuleSessionScreen> {
                       ),
                     ),
                   section(
-                    localizedText(language, 'መክፈቻ ጸሎት', 'Opening prayers'),
+                    localizedText(language, 'መክፈቻ ጸሎት', 'Opening Prayer'),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -964,68 +1040,8 @@ class _RuleSessionScreenState extends ConsumerState<RuleSessionScreen> {
                                 )
                               : ethiopic(size: textSize),
                         ),
-                      ],
-                    ),
-                  ),
-                  section(
-                    localizedText(language, 'ንባብ', 'Bible readings'),
-                    Column(
-                      children: [
-                        for (final ref in item.readings)
-                          _BibleReadingCard(
-                            referenceText: _referenceLabel(
-                              _referenceFor(ref),
-                              ref,
-                              language,
-                            ),
-                            reference: _referenceFor(ref),
-                            language: language,
-                            textSize: textSize,
-                          ),
-                      ],
-                    ),
-                  ),
-                  if (item.psalmChapters.isNotEmpty ||
-                      item.midnightPsalmChapters.isNotEmpty)
-                    section(
-                      localizedText(
-                        language,
-                        item.midnightPsalmChapters.isNotEmpty
-                            ? 'የእኩለ ሌሊት መዝሙር'
-                            : 'መዝሙረ ዳዊት',
-                        item.midnightPsalmChapters.isNotEmpty
-                            ? 'Midnight Psalms'
-                            : 'Psalms',
-                      ),
-                      Column(
-                        children: [
-                          for (final chapter in [
-                            ...item.psalmChapters,
-                            ...item.midnightPsalmChapters,
-                          ])
-                            _PsalmChapterCard(
-                              chapter: chapter,
-                              language: language,
-                              textSize: textSize,
-                            ),
-                        ],
-                      ),
-                    ),
-                  section(
-                    localizedText(
-                      language,
-                      'የሰአቱ የጸሎት ሥርዓት',
-                      'Prayer for this hour',
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (_assignmentLabel(
-                          item,
-                          widget.day,
-                          widget.hour,
-                          language,
-                        ).isNotEmpty)
+                        if (widget.day == 6 && item.assignment.isNotEmpty) ...[
+                          const SizedBox(height: 12),
                           Text(
                             _assignmentLabel(
                               item,
@@ -1040,6 +1056,7 @@ class _RuleSessionScreenState extends ConsumerState<RuleSessionScreen> {
                                   )
                                 : ethiopic(size: textSize),
                           ),
+                        ],
                         if (item.special.isNotEmpty) ...[
                           const SizedBox(height: 8),
                           Text(
@@ -1057,13 +1074,55 @@ class _RuleSessionScreenState extends ConsumerState<RuleSessionScreen> {
                       ],
                     ),
                   ),
+                  if (item.psalmChapters.isNotEmpty ||
+                      item.midnightPsalmChapters.isNotEmpty)
+                    section(
+                      localizedText(language, 'መዝሙረ ዳዊት', 'Psalm'),
+                      Column(
+                        children: [
+                          for (final chapter in [
+                            ...item.psalmChapters,
+                            ...item.midnightPsalmChapters,
+                          ])
+                            _PsalmChapterCard(
+                              chapter: chapter,
+                              language: language,
+                              textSize: textSize,
+                            ),
+                        ],
+                      ),
+                    ),
+                  section(
+                    localizedText(language, 'ንባብ', 'Bible Reading'),
+                    Column(
+                      children: [
+                        for (final ref in item.readings)
+                          _BibleReadingCard(
+                            referenceText: _referenceLabel(
+                              _referenceFor(ref),
+                              ref,
+                              language,
+                            ),
+                            reference: _referenceFor(ref),
+                            language: language,
+                            textSize: textSize,
+                          ),
+                      ],
+                    ),
+                  ),
+                  MetaniaCounter(
+                    prayerHourId: widget.hour,
+                    enabled: !_isUpcomingHour,
+                  ),
                   section(
                     localizedText(language, 'መዝጊያ ጸሎት', 'Closing prayer'),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          isEnglish ? _commonEnglish : _common,
+                          isEnglish
+                              ? _closingOurFatherEnglish
+                              : _closingOurFather,
                           style: isEnglish
                               ? GoogleFonts.ebGaramond(
                                   fontSize: textSize,
@@ -1073,7 +1132,9 @@ class _RuleSessionScreenState extends ConsumerState<RuleSessionScreen> {
                         ),
                         const SizedBox(height: 20),
                         Text(
-                          isEnglish ? _marianPrayerEnglish : _marianPrayer,
+                          isEnglish
+                              ? _closingMarianPrayerEnglish
+                              : _closingMarianPrayer,
                           style: isEnglish
                               ? GoogleFonts.ebGaramond(
                                   fontSize: textSize,
@@ -1083,11 +1144,6 @@ class _RuleSessionScreenState extends ConsumerState<RuleSessionScreen> {
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  MetaniaCounter(
-                    prayerHourId: widget.hour,
-                    enabled: !_isUpcomingHour,
                   ),
                 ],
               ),

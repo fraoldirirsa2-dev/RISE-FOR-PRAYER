@@ -8,7 +8,6 @@ import 'package:rise_for_prayer/providers/app_providers.dart';
 import 'package:rise_for_prayer/providers/settings_provider.dart';
 import 'package:rise_for_prayer/services/time_service.dart';
 import 'package:rise_for_prayer/utils/localization.dart';
-import 'package:rise_for_prayer/widgets/metania_counter.dart';
 import 'package:rise_for_prayer/features/weekly_prayer_rule/weekly_prayer_rule.dart';
 
 class ReadingScreen extends ConsumerStatefulWidget {
@@ -140,12 +139,9 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
                           day: ruleDay,
                           hour: hour.id,
                           language: settings.language,
+                          metaniaEnabled: status != PrayerStatus.upcoming,
                         ),
                         const SizedBox(height: 14),
-                        MetaniaCounter(
-                          prayerHourId: hour.id,
-                          enabled: status != PrayerStatus.upcoming,
-                        ),
                         const SizedBox(height: 28),
                         _prayerNavigation(index, settings.language),
                       ],
@@ -338,7 +334,11 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
                       )
                     : completed
                     ? localizedText(settings.language, 'ተጠናቋል', 'Completed')
-                    : localizedText(settings.language, 'ጸሎቱን አጠናቅቅ', 'Mark complete'),
+                    : localizedText(
+                        settings.language,
+                        'ጸሎቱን አጠናቅቅ',
+                        'Mark complete',
+                      ),
               ),
             ),
           ],
@@ -429,7 +429,9 @@ class _ReadingScreenState extends ConsumerState<ReadingScreen> {
                 segments: [
                   ButtonSegment(
                     value: 0.82,
-                    label: Text(localizedText(settings.language, 'ጠባብ', 'Compact')),
+                    label: Text(
+                      localizedText(settings.language, 'ጠባብ', 'Compact'),
+                    ),
                   ),
                   ButtonSegment(
                     value: 1,

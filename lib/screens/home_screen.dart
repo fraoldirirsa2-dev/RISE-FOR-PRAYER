@@ -47,7 +47,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       bottomNavigationBar: BottomNavigationBar(
         backgroundColor: background,
         selectedItemColor: colors.primary,
-        unselectedItemColor: colors.onSurface.withValues(alpha: 0.45),
+        unselectedItemColor: colors.onSurface.withValues(alpha: 0.68),
         currentIndex: _selectedIndex,
         onTap: (index) => setState(() => _selectedIndex = index),
         items: [
@@ -80,12 +80,9 @@ class _HomeTab extends ConsumerStatefulWidget {
   ConsumerState<_HomeTab> createState() => _HomeTabState();
 }
 
-class _HomeTabState extends ConsumerState<_HomeTab> with WidgetsBindingObserver {
+class _HomeTabState extends ConsumerState<_HomeTab>
+    with WidgetsBindingObserver {
   final _scrollController = ScrollController();
-  final _hourKeys = <int, GlobalKey>{
-    for (final hour in hours) hour.id: GlobalKey(),
-  };
-  int? _focusedPrayerId;
 
   @override
   void initState() {
@@ -113,58 +110,80 @@ class _HomeTabState extends ConsumerState<_HomeTab> with WidgetsBindingObserver 
     final language = ref.watch(settingsProvider).language;
     final dailyScripture = ref.watch(dailyScriptureProvider);
     final timeService = ref.watch(timeServiceProvider);
-    final completed = prayers.completedCount;
-    final currentPrayer = timeService.currentPrayer;
-    _focusCurrentPrayer(currentPrayer.hour.id);
 
-    return SingleChildScrollView(
-      controller: _scrollController,
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          const SizedBox(height: 16),
-          _buildHeader(timeService, language, context),
-          const SizedBox(height: 16),
-          _buildHeroCard(
-            completed,
-            completed / 7,
-            prayers,
-            timeService,
-            context,
-            language,
-          ),
-          const SizedBox(height: 16),
-          _buildDailyScripture(language, context, dailyScripture),
-          Card(
-            child: ListTile(
-              title: Text(localizedText(language, 'የሳምንቱ የጸሎት ሥርዓት', 'Weekly prayer rule')),
-              subtitle: Text(localizedText(language, 'መዝሙረ ዳዊት እና የጸሎት ሥርዓት', 'Psalms and the daily prayer order')),
-              onTap: () => Navigator.pushNamed(context, '/weekly-prayer-rule'),
+    return SafeArea(
+      child: SingleChildScrollView(
+        controller: _scrollController,
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildHeader(timeService, language, context),
+                const SizedBox(height: 20),
+                _buildHeroCard(
+                  prayers.completedCount,
+                  prayers.completedCount / 7,
+                  timeService,
+                  context,
+                  language,
+                ),
+                const SizedBox(height: 20),
+                _buildDailyScripture(language, context, dailyScripture),
+                const SizedBox(height: 28),
+                Text(
+                  localizedText(language, 'የጸሎት ሰዓታት', 'Prayer Hours'),
+                  style: language == 'eth'
+                      ? GoogleFonts.notoSansEthiopic(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        )
+                      : GoogleFonts.cinzel(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                ),
+                const SizedBox(height: 8),
+                ...hours.map(
+                  (hour) =>
+                      _hourTile(hour, prayers, timeService, context, language),
+                ),
+                const SizedBox(height: 24),
+                Card(
+                  child: ListTile(
+                    leading: Icon(
+                      Icons.menu_book_outlined,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    title: Text(
+                      localizedText(
+                        language,
+                        'የሳምንቱ የጸሎት ሥርዓት',
+                        'Weekly prayer rule',
+                      ),
+                    ),
+                    subtitle: Text(
+                      localizedText(
+                        language,
+                        'መዝሙረ ዳዊት እና የጸሎት ሥርዓት',
+                        'Psalms and the daily prayer order',
+                      ),
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () =>
+                        Navigator.pushNamed(context, '/weekly-prayer-rule'),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
-          ...hours.map(
-            (hour) => _hourTile(hour, prayers, timeService, context, language),
-          ),
-          const SizedBox(height: 16),
-        ],
+        ),
       ),
     );
-  }
-
-  void _focusCurrentPrayer(int prayerId) {
-    if (_focusedPrayerId == prayerId) return;
-    _focusedPrayerId = prayerId;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final itemContext = _hourKeys[prayerId]?.currentContext;
-      if (!mounted || itemContext == null) return;
-      Scrollable.ensureVisible(
-        itemContext,
-        alignment: 0.35,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-      );
-    });
   }
 
   PrayerStatus _statusForHour(TimeService timeService, int hourId) {
@@ -192,29 +211,45 @@ class _HomeTabState extends ConsumerState<_HomeTab> with WidgetsBindingObserver 
             children: [
               Text(
                 localizedText(language, 'ሰላም ይሁንልዎ', 'Peace be with you'),
-                style: GoogleFonts.notoSansEthiopic(
-                  fontSize: 13,
-                  color: colors.primary.withValues(alpha: 0.7),
-                ),
+                style: language == 'eth'
+                    ? GoogleFonts.notoSansEthiopic(
+                        fontSize: 14,
+                        color: colors.primary.withValues(alpha: 0.82),
+                      )
+                    : GoogleFonts.ebGaramond(
+                        fontSize: 16,
+                        color: colors.primary.withValues(alpha: 0.82),
+                      ),
               ),
               const SizedBox(height: 2),
               Text(
                 '${localizedText(language, 'ዕለታዊ ጸሎት', 'Daily Prayer')} · ${timeService.formattedTime}',
-                style: GoogleFonts.cinzel(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: colors.onSurface,
-                ),
+                style: language == 'eth'
+                    ? GoogleFonts.notoSansEthiopic(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: colors.onSurface,
+                      )
+                    : GoogleFonts.cinzel(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w700,
+                        color: colors.onSurface,
+                      ),
               ),
               const SizedBox(height: 3),
               Text(
                 language == 'eth'
                     ? timeService.formatEthiopianDate(language: language)
                     : timeService.formattedGregorianDate,
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: colors.primary.withValues(alpha: 0.65),
-                ),
+                style: language == 'eth'
+                    ? GoogleFonts.notoSansEthiopic(
+                        fontSize: 13,
+                        color: colors.onSurface.withValues(alpha: 0.72),
+                      )
+                    : GoogleFonts.inter(
+                        fontSize: 13,
+                        color: colors.onSurface.withValues(alpha: 0.72),
+                      ),
               ),
             ],
           ),
@@ -236,7 +271,6 @@ class _HomeTabState extends ConsumerState<_HomeTab> with WidgetsBindingObserver 
   Widget _buildHeroCard(
     int completed,
     double progress,
-    PrayerProvider prayerProvider,
     TimeService timeService,
     BuildContext context,
     String language,
@@ -244,6 +278,17 @@ class _HomeTabState extends ConsumerState<_HomeTab> with WidgetsBindingObserver 
     final colors = Theme.of(context).colorScheme;
     final nextPrayer = timeService.nextPrayer;
     final currentPrayer = timeService.currentPrayer;
+    final now = timeService.now;
+    final startsTomorrow =
+        nextPrayer.dateTime.year != now.year ||
+        nextPrayer.dateTime.month != now.month ||
+        nextPrayer.dateTime.day != now.day;
+    final scheduledDay = localizedText(
+      language,
+      startsTomorrow ? 'ነገ' : 'ዛሬ',
+      startsTomorrow ? 'Tomorrow' : 'Today',
+    );
+    final countdown = timeService.nextPrayerCountdown;
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
@@ -251,9 +296,9 @@ class _HomeTabState extends ConsumerState<_HomeTab> with WidgetsBindingObserver 
         border: Border.all(color: colors.primary.withValues(alpha: 0.18)),
         boxShadow: [
           BoxShadow(
-            color: colors.primary.withValues(alpha: 0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+            color: colors.primary.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -262,54 +307,69 @@ class _HomeTabState extends ConsumerState<_HomeTab> with WidgetsBindingObserver 
         children: [
           Text(
             localizedText(language, 'ቀጣዩ የጸሎት ሰዓት', 'Next Prayer Hour'),
-            style: GoogleFonts.cinzel(
-              fontSize: 10,
-              letterSpacing: 2,
-              color: colors.secondary,
-            ),
+            style: language == 'eth'
+                ? GoogleFonts.notoSansEthiopic(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: colors.secondary,
+                  )
+                : GoogleFonts.cinzel(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: colors.secondary,
+                  ),
           ),
           const SizedBox(height: 4),
           Text(
             '${localizedText(language, 'አሁን', 'Current')}: ${localizedText(language, currentPrayer.hour.eth, currentPrayer.hour.en)}',
             style: GoogleFonts.inter(
-              fontSize: 10,
-              color: colors.onSurface.withValues(alpha: 0.62),
+              fontSize: 12,
+              color: colors.onSurface.withValues(alpha: 0.76),
             ),
           ),
           const SizedBox(height: 12),
           Row(
             children: [
-              SizedBox(
-                width: 120,
-                height: 120,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    CustomPaint(
-                      size: const Size(120, 120),
-                      painter: _ProgressPainter(
-                        progress: progress,
-                        color: colors.secondary,
-                      ),
-                    ),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          nextPrayer.hour.icon,
-                          style: const TextStyle(fontSize: 22),
+              Semantics(
+                excludeSemantics: true,
+                label: localizedText(
+                  language,
+                  'ከ7 የጸሎት ሰዓታት ውስጥ $completed ተጠናቋል',
+                  '$completed of 7 prayer hours completed',
+                ),
+                child: SizedBox(
+                  width: 120,
+                  height: 120,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      CustomPaint(
+                        size: const Size(120, 120),
+                        painter: _ProgressPainter(
+                          progress: progress,
+                          color: colors.secondary,
                         ),
-                        Text(
-                          '$completed/7',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                      ),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.access_time_rounded,
+                            size: 24,
                             color: colors.secondary,
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
+                          Text(
+                            '$completed/7',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: colors.secondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: 16),
@@ -323,27 +383,52 @@ class _HomeTabState extends ConsumerState<_HomeTab> with WidgetsBindingObserver 
                         nextPrayer.hour.eth,
                         nextPrayer.hour.en,
                       ),
-                      style: GoogleFonts.notoSansEthiopic(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: colors.onSurface,
-                      ),
+                      style: language == 'eth'
+                          ? GoogleFonts.notoSansEthiopic(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: colors.onSurface,
+                            )
+                          : GoogleFonts.ebGaramond(
+                              fontSize: 21,
+                              fontWeight: FontWeight.w700,
+                              color: colors.onSurface,
+                            ),
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      nextPrayer.hour.time,
+                      '$scheduledDay · ${nextPrayer.hour.time}',
                       style: GoogleFonts.inter(
-                        fontSize: 11,
-                        color: colors.onSurface.withValues(alpha: 0.35),
+                        fontSize: 13,
+                        color: colors.onSurface.withValues(alpha: 0.72),
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      timeService.nextPrayerCountdown,
-                      style: GoogleFonts.inter(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: colors.secondary,
+                      localizedText(language, 'የሚቀረው ጊዜ', 'Starts in'),
+                      style: language == 'eth'
+                          ? GoogleFonts.notoSansEthiopic(
+                              fontSize: 13,
+                              color: colors.onSurface.withValues(alpha: 0.76),
+                            )
+                          : GoogleFonts.inter(
+                              fontSize: 13,
+                              color: colors.onSurface.withValues(alpha: 0.76),
+                            ),
+                    ),
+                    Semantics(
+                      label: localizedText(
+                        language,
+                        'ቀጣዩ ጸሎት በ$countdown ይጀምራል',
+                        'Next prayer starts in $countdown',
+                      ),
+                      child: Text(
+                        countdown,
+                        style: GoogleFonts.inter(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          color: colors.secondary,
+                        ),
                       ),
                     ),
                   ],
@@ -359,18 +444,22 @@ class _HomeTabState extends ConsumerState<_HomeTab> with WidgetsBindingObserver 
                 context,
                 MaterialPageRoute(
                   builder: (_) => RuleSessionScreen(
-                    day: DateTime.now().weekday - 1,
-                    hour: prayerProvider.nextIncompleteIndex,
+                    day: nextPrayer.dateTime.weekday - 1,
+                    hour: nextPrayer.hour.id,
                   ),
                 ),
               ),
               child: Text(
-                localizedText(language, 'ጸሎቱን ጀምር', 'Begin Prayer'),
-                style: GoogleFonts.cinzel(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1,
-                ),
+                localizedText(language, 'ቀጣዩን ጸሎት ይመልከቱ', 'View Next Prayer'),
+                style: language == 'eth'
+                    ? GoogleFonts.notoSansEthiopic(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      )
+                    : GoogleFonts.cinzel(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
               ),
             ),
           ),
@@ -396,44 +485,77 @@ class _HomeTabState extends ConsumerState<_HomeTab> with WidgetsBindingObserver 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         color: colors.surface,
         border: Border.all(color: colors.primary.withValues(alpha: 0.15)),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            localizedText(language, 'የዕለቱ ቅዱስ ቃል', 'Daily Scripture'),
+            style: language == 'eth'
+                ? GoogleFonts.notoSansEthiopic(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: colors.onSurface,
+                  )
+                : GoogleFonts.cinzel(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: colors.onSurface,
+                  ),
+          ),
+          const SizedBox(height: 10),
           const GoldDividerSmall(),
           const SizedBox(height: 12),
           if (scripture.loading && scripture.passage == null)
-            Text(localizedText(language, 'ቅዱስ መጽሐፍ በመጫን ላይ...', 'Loading Scripture...'))
+            Text(
+              localizedText(
+                language,
+                'ቅዱስ መጽሐፍ በመጫን ላይ...',
+                'Loading Scripture...',
+              ),
+            )
           else if (scripture.passage != null) ...[
             Text(
               language == 'en'
                   ? scripture.passage!.verses.every(
-                      (verse) => verse.englishText != null,
-                    )
-                      ? scripture.passage!.verses
-                            .map((verse) => verse.englishText!)
-                            .join('\n')
-                      : 'English text is unavailable for this passage because its verse numbering does not match the Amharic source.'
+                          (verse) => verse.englishText != null,
+                        )
+                        ? scripture.passage!.verses
+                              .map((verse) => verse.englishText!)
+                              .join('\n')
+                        : 'English text is unavailable for this passage.'
                   : scripture.passage!.verses
                         .map((verse) => verse.amharicText)
                         .join('\n'),
-              textAlign: TextAlign.center,
-              style: GoogleFonts.notoSansEthiopic(
-                fontSize: 14,
-                color: colors.onSurface.withValues(alpha: 0.8),
-                height: 1.8,
-              ),
+              textAlign: TextAlign.start,
+              style: language == 'eth'
+                  ? GoogleFonts.notoSansEthiopic(
+                      fontSize: 17,
+                      color: colors.onSurface.withValues(alpha: 0.9),
+                      height: 1.9,
+                    )
+                  : GoogleFonts.ebGaramond(
+                      fontSize: 19,
+                      color: colors.onSurface.withValues(alpha: 0.9),
+                      height: 1.65,
+                    ),
             ),
             const SizedBox(height: 8),
             Text(
               referenceLabel,
-              style: GoogleFonts.cinzel(
-                fontSize: 10,
-                letterSpacing: 1,
-                color: colors.secondary,
-              ),
+              style: language == 'eth'
+                  ? GoogleFonts.notoSansEthiopic(
+                      fontSize: 13,
+                      color: colors.secondary,
+                    )
+                  : GoogleFonts.ebGaramond(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: colors.secondary,
+                    ),
             ),
           ] else
             Text(
@@ -469,77 +591,86 @@ class _HomeTabState extends ConsumerState<_HomeTab> with WidgetsBindingObserver 
       PrayerStatus.missed => localizedText(language, 'ያመለጠ', 'MISSED'),
     };
 
-    return GestureDetector(
-      key: _hourKeys[hour.id],
-      onTap: () {
-        // The weekly rule follows the device's local weekday. Hour ids in the
-        // Hours screen share the same seven-hour order as the rule data, so
-        // Prime, Terce, and the other hours open today's corresponding rule.
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => RuleSessionScreen(
-              day: DateTime.now().weekday - 1,
-              hour: hour.id,
-            ),
-          ),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
+    return Column(
+      children: [
+        Material(
           color: current
-              ? colors.primary.withValues(alpha: 0.12)
+              ? colors.primary.withValues(alpha: 0.08)
               : done
-              ? colors.secondary.withValues(alpha: 0.08)
-              : colors.surface,
-          border: Border.all(
-            color: current
-                ? colors.secondary.withValues(alpha: 0.38)
-                : done
-                ? colors.secondary.withValues(alpha: 0.12)
-                : colors.secondary.withValues(alpha: 0.06),
-          ),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              ? colors.secondary.withValues(alpha: 0.05)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => RuleSessionScreen(
+                  day: DateTime.now().weekday - 1,
+                  hour: hour.id,
+                ),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              child: Row(
                 children: [
-                  Text(
-                    localizedText(language, hour.ge, hour.en),
-                    style: GoogleFonts.notoSansEthiopic(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: done ? colors.secondary : colors.onSurface,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          localizedText(language, hour.ge, hour.en),
+                          style: language == 'eth'
+                              ? GoogleFonts.notoSansEthiopic(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w600,
+                                  color: colors.onSurface,
+                                )
+                              : GoogleFonts.ebGaramond(
+                                  fontSize: 19,
+                                  fontWeight: FontWeight.w600,
+                                  color: colors.onSurface,
+                                ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          hour.time,
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: colors.onSurface.withValues(alpha: 0.74),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                  const SizedBox(width: 12),
                   Text(
-                    hour.time,
+                    statusLabel,
                     style: GoogleFonts.inter(
-                      fontSize: 11,
-                      color: done
-                          ? colors.secondary
-                          : colors.onSurface.withValues(alpha: 0.68),
+                      fontSize: 12,
+                      fontWeight: current ? FontWeight.w700 : FontWeight.w600,
+                      color: colors.secondary,
                     ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.chevron_right,
+                    size: 20,
+                    color: colors.onSurface.withValues(alpha: 0.55),
                   ),
                 ],
               ),
             ),
-            Text(
-              statusLabel,
-              style: GoogleFonts.inter(
-                fontSize: 9,
-                fontWeight: current ? FontWeight.w700 : FontWeight.w500,
-                color: colors.secondary,
-              ),
-            ),
-          ],
+          ),
         ),
-      ),
+        Divider(
+          height: 1,
+          indent: 14,
+          endIndent: 14,
+          color: colors.outlineVariant.withValues(alpha: 0.55),
+        ),
+      ],
     );
   }
 }

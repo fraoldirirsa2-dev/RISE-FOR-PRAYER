@@ -10,7 +10,7 @@ enum ThemeModeType { light, dark }
 class SettingsProvider extends ChangeNotifier {
   ThemeModeType _themeMode = ThemeModeType.dark;
 
-  String _language = 'en';
+  String _language = 'eth';
 
   String? _notificationError;
 
@@ -501,7 +501,7 @@ class SettingsProvider extends ChangeNotifier {
 
       final savedLanguage = prefs.getString('language');
 
-      _language = savedLanguage == 'eth' ? 'eth' : 'en';
+      _language = savedLanguage == 'en' ? 'en' : 'eth';
 
       _vibrationEnabled = prefs.getBool('vibration') ?? true;
 

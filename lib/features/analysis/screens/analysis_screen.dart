@@ -15,87 +15,117 @@ class AnalysisScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final analysis = ref.watch(analysisProvider);
-    final prayer = ref.read(prayerProvider);
+    final prayer = ref.watch(prayerProvider);
     final language = ref.watch(settingsProvider).language;
     final summary = analysis.summary;
-    final today = summary.dailyStatistics.isEmpty
-        ? null
-        : summary.dailyStatistics.last;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(localizedText(language, 'የጸሎት ትንተና', 'Prayer Analysis')),
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('የጸሎት ትንተና', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Prayer Analysis',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
       ),
       body: LayoutBuilder(
-              builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 760;
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 1100),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _RangeSelector(
-                            analysis: analysis,
-                            prayer: prayer,
-                            language: language,
-                          ),
-                          const SizedBox(height: 10),
-                          _AnalysisGuide(language: language),
-                          const SizedBox(height: 16),
-                          if (!summary.hasHistory) ...[
-                            _NoPrayerHistory(language: language),
-                            const SizedBox(height: 16),
-                          ],
-                          _SummaryGrid(
-                            summary: summary,
-                            today: today!,
-                            language: language,
-                          ),
-                          const SizedBox(height: 16),
-                          if (wide)
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: _WeeklyChart(
-                                    summary: summary,
-                                    language: language,
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: _StreakCard(
-                                    summary: summary,
-                                    language: language,
-                                  ),
-                                ),
-                              ],
-                            )
-                          else ...[
-                            _WeeklyChart(summary: summary, language: language),
-                            const SizedBox(height: 16),
-                            _StreakCard(summary: summary, language: language),
-                          ],
-                          const SizedBox(height: 16),
-                          _PerformanceCard(
-                            summary: summary,
-                            language: language,
-                          ),
-                          const SizedBox(height: 16),
-                          _MetaniaAnalysis(
-                            rangeDays: analysis.rangeDays,
-                            language: language,
-                          ),
-                        ],
-                      ),
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 760;
+          return SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1100),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _RangeSelector(
+                      analysis: analysis,
+                      prayer: prayer,
+                      language: language,
                     ),
-                  ),
-                );
-              },
+                    const SizedBox(height: 16),
+                    if (!summary.hasHistory ||
+                        summary.dailyStatistics.isEmpty) ...[
+                      _EmptyAnalysisState(language: language),
+                      const SizedBox(height: 16),
+                    ] else ...[
+                      if (wide)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: _TodayPrayerJourney(
+                                completedHours: prayer.completedHours,
+                                language: language,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              flex: 2,
+                              child: _SupportingMetrics(
+                                summary: summary,
+                                language: language,
+                              ),
+                            ),
+                          ],
+                        )
+                      else ...[
+                        _TodayPrayerJourney(
+                          completedHours: prayer.completedHours,
+                          language: language,
+                        ),
+                        const SizedBox(height: 14),
+                        _SupportingMetrics(
+                          summary: summary,
+                          language: language,
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      _WeeklyChart(summary: summary, language: language),
+                      const SizedBox(height: 16),
+                      if (wide)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: _PerformanceCard(
+                                summary: summary,
+                                language: language,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: _StreakCard(
+                                summary: summary,
+                                language: language,
+                              ),
+                            ),
+                          ],
+                        )
+                      else ...[
+                        _PerformanceCard(summary: summary, language: language),
+                        const SizedBox(height: 16),
+                        _StreakCard(summary: summary, language: language),
+                      ],
+                    ],
+                    const SizedBox(height: 16),
+                    _MetaniaAnalysis(
+                      rangeDays: analysis.rangeDays,
+                      language: language,
+                    ),
+                  ],
+                ),
+              ),
             ),
+          );
+        },
+      ),
     );
   }
 }
@@ -139,8 +169,8 @@ class _RangeSelector extends StatelessWidget {
   }
 }
 
-class _AnalysisGuide extends StatelessWidget {
-  const _AnalysisGuide({required this.language});
+class _EmptyAnalysisState extends StatelessWidget {
+  const _EmptyAnalysisState({required this.language});
 
   final String language;
 
@@ -148,25 +178,35 @@ class _AnalysisGuide extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.all(14),
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: colors.primaryContainer.withValues(alpha: 0.45),
+        color: colors.surface,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.outlineVariant),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
         children: [
-          Icon(Icons.lightbulb_outline, color: colors.primary),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              localizedText(
-                language,
-                'ጊዜውን ይምረጡ። እያንዳንዱ የተጠናቀቀ ሰዓት ከ7 የዕለት ጸሎቶች አንዱ ነው። የአሞሌዎቹ ርዝመት የተጠናቀቀውን መጠን ያሳያል።',
-                'Choose a time range above. Each day has 7 prayer hours; longer bars mean more hours completed.',
-              ),
-              style: Theme.of(context).textTheme.bodyMedium,
+          Icon(Icons.self_improvement, size: 34, color: colors.secondary),
+          const SizedBox(height: 12),
+          Text(
+            localizedText(
+              language,
+              'የጸሎት ታሪክ እየተጠራ ነው',
+              'No prayer history yet',
             ),
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            localizedText(
+              language,
+              'የጸሎት ሰዓቶችን ሲያጠናቅቁ የጸሎት ታሪክዎ እዚህ ይታያል።',
+              'Prayer history will appear here as you complete prayer hours.',
+            ),
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium,
           ),
         ],
       ),
@@ -174,86 +214,291 @@ class _AnalysisGuide extends StatelessWidget {
   }
 }
 
-class _SummaryGrid extends StatelessWidget {
-  const _SummaryGrid({
-    required this.summary,
-    required this.today,
+const _prayerHourNamesAmharic = [
+  'ነግህ',
+  'ሠለስት',
+  'ቀትር',
+  'ተሰዓት',
+  'ሠርክ',
+  'ንዋም',
+  'መንፈቀ ሌሊት',
+];
+
+class _TodayPrayerJourney extends StatelessWidget {
+  const _TodayPrayerJourney({
+    required this.completedHours,
     required this.language,
   });
 
-  final PrayerAnalysisSummary summary;
-  final DailyPrayerStatistic today;
+  final List<bool> completedHours;
   final String language;
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 600 ? 4 : 2;
-        return GridView.count(
-          crossAxisCount: columns,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          mainAxisExtent: columns == 4 ? 135 : 150,
-          children: [
-            _MetricCard(
-              label: localizedText(language, 'የዛሬ እድገት', "Today's Progress"),
-              value: '${today.completed} / 7',
-              detail: _percent(today.rate),
+    final colors = Theme.of(context).colorScheme;
+    final completed = completedHours.where((value) => value).length;
+    final rate = completed / 7;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: colors.primaryContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            localizedText(language, 'የዛሬ የጸሎት ጉዞ', "Today's Prayer Journey"),
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: colors.onPrimaryContainer,
+              fontWeight: FontWeight.w700,
             ),
-            _MetricCard(
-              label: localizedText(language, 'የጸሎት መጠን', 'Completion Rate'),
-              value: _percent(summary.completionRate),
-              detail: '${summary.totalCompleted} / ${summary.totalExpected}',
+          ),
+          const SizedBox(height: 14),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '$completed / 7',
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  color: colors.onPrimaryContainer,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  _percent(rate),
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: colors.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Semantics(
+            label: localizedText(
+              language,
+              'ከ7 የጸሎት ሰዓታት ውስጥ $completed ተጠናቋል፣ ${_percent(rate)}',
+              '$completed of 7 prayer hours completed, ${_percent(rate)}',
             ),
-            _MetricCard(
-              label: localizedText(language, 'የአሁኑ ተከታታይ ጊዜ', 'Current Streak'),
-              value: '${summary.currentStreak}',
-              detail: localizedText(language, 'ቀናት', 'days'),
+            child: ExcludeSemantics(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: LinearProgressIndicator(
+                  value: rate,
+                  minHeight: 10,
+                  color: colors.primary,
+                  backgroundColor: colors.onPrimaryContainer.withValues(
+                    alpha: 0.12,
+                  ),
+                ),
+              ),
             ),
-            _MetricCard(
-              label: localizedText(language, 'ምርጥ ተከታታይ ጊዜ', 'Best Streak'),
-              value: '${summary.bestStreak}',
-              detail: localizedText(language, 'ቀናት', 'days'),
-            ),
-          ],
-        );
-      },
+          ),
+          const SizedBox(height: 18),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth >= 900
+                  ? 7
+                  : constraints.maxWidth >= 560
+                  ? 4
+                  : 2;
+              final gap = 8.0;
+              final width =
+                  (constraints.maxWidth - gap * (columns - 1)) / columns;
+              return Wrap(
+                spacing: gap,
+                runSpacing: 8,
+                children: [
+                  for (var index = 0; index < 7; index++)
+                    SizedBox(
+                      width: width,
+                      child: _PrayerHourStatus(
+                        index: index,
+                        completed:
+                            index < completedHours.length &&
+                            completedHours[index],
+                        language: language,
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _MetricCard extends StatelessWidget {
-  const _MetricCard({
-    required this.label,
-    required this.value,
-    required this.detail,
+class _PrayerHourStatus extends StatelessWidget {
+  const _PrayerHourStatus({
+    required this.index,
+    required this.completed,
+    required this.language,
   });
 
-  final String label;
-  final String value;
-  final String detail;
+  final int index;
+  final bool completed;
+  final String language;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
+    final hourName = localizedText(
+      language,
+      _prayerHourNamesAmharic[index],
+      hours[index].en,
+    );
+    final state = localizedText(
+      language,
+      completed ? 'ተጠናቋል' : 'አልተጠናቀቀም',
+      completed ? 'Completed' : 'Not completed',
+    );
+    return Semantics(
+      label: '$hourName, $state',
+      child: ExcludeSemantics(
+        child: Row(
           children: [
-            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 4),
-            Text(value, style: Theme.of(context).textTheme.titleLarge),
-            Text(detail, style: TextStyle(color: colors.primary)),
+            Icon(
+              completed ? Icons.check_circle : Icons.radio_button_unchecked,
+              size: 20,
+              color: completed
+                  ? colors.primary
+                  : colors.onPrimaryContainer.withValues(alpha: 0.58),
+            ),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Text(
+                hourName,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: colors.onPrimaryContainer),
+              ),
+            ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _SupportingMetrics extends StatelessWidget {
+  const _SupportingMetrics({required this.summary, required this.language});
+
+  final PrayerAnalysisSummary summary;
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final metrics = [
+      (
+        localizedText(language, 'የጸሎት መጠን', 'Completion rate'),
+        _percent(summary.completionRate),
+        localizedText(
+          language,
+          '${summary.totalCompleted} ከ ${summary.totalExpected} የተጠናቀቁ',
+          '${summary.totalCompleted} completed of ${summary.totalExpected}',
+        ),
+      ),
+      (
+        localizedText(language, 'የአሁኑ ተከታታይ ጊዜ', 'Current streak'),
+        '${summary.currentStreak}',
+        localizedText(language, 'ቀናት', 'days'),
+      ),
+      (
+        localizedText(language, 'ምርጥ ተከታታይ ጊዜ', 'Best streak'),
+        '${summary.bestStreak}',
+        localizedText(language, 'ቀናት', 'days'),
+      ),
+    ];
+    final stackMetrics =
+        MediaQuery.sizeOf(context).width < 1120 ||
+        MediaQuery.textScalerOf(context).scale(1) > 1.2;
+    Widget metric(int index, {required bool compact}) {
+      final label = Text(
+        metrics[index].$1,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.bodySmall
+            ?.copyWith(color: colors.onSurface.withValues(alpha: 0.76)),
+      );
+      final value = Text(
+        metrics[index].$2,
+        style: Theme.of(context).textTheme.titleMedium
+            ?.copyWith(color: colors.onSurface, fontWeight: FontWeight.w700),
+      );
+      final detail = Text(
+        metrics[index].$3,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.bodySmall,
+      );
+      if (compact) {
+        return Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [label, detail],
+              ),
+            ),
+            const SizedBox(width: 12),
+            value,
+          ],
+        );
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [label, const SizedBox(height: 3), value, detail],
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: BoxDecoration(
+        border: Border.symmetric(
+          horizontal: BorderSide(color: colors.outlineVariant),
+        ),
+      ),
+      child: stackMetrics
+          ? Column(
+              children: [
+                for (var index = 0; index < metrics.length; index++) ...[
+                  if (index > 0)
+                    Divider(height: 18, color: colors.outlineVariant),
+                  metric(index, compact: true),
+                ],
+              ],
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var index = 0; index < metrics.length; index++) ...[
+                  if (index > 0)
+                    SizedBox(
+                      height: 56,
+                      child: VerticalDivider(
+                        width: 1,
+                        color: colors.outlineVariant,
+                      ),
+                    ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: metric(index, compact: false),
+                    ),
+                  ),
+                ],
+              ],
+            ),
     );
   }
 }
@@ -266,67 +511,128 @@ class _WeeklyChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final days = summary.dailyStatistics.length <= 14
-        ? summary.dailyStatistics
-        : _bucketDays(summary.dailyStatistics, 7);
-    final primary = Theme.of(context).colorScheme.primary;
+    final buckets = _chartBuckets(summary.dailyStatistics);
+    final colors = Theme.of(context).colorScheme;
     return _Panel(
-      title: localizedText(language, 'እድገት በቀን', 'Progress by Day'),
-      child: Semantics(
-        label: days
-            .map(
-              (day) => '${_shortDate(day.date)}: ${day.completed}/${day.total}',
-            )
-            .join(', '),
-        child: SizedBox(
-          height: 190,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+      title: localizedText(language, 'እድገት በጊዜ', 'Prayer Completion Trend'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            localizedText(
+              language,
+              'አሞሌዎቹ በጊዜ ክፍሎች የተጠናቀቁ ጸሎቶችን መጠን ያነጻጽራሉ፤ ወርቃማው የመጨረሻውን ጊዜ ያመለክታል።',
+              'Bars compare completion rates across the selected period; gold marks the latest interval.',
+            ),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              for (final day in days)
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 3),
-                    child: Tooltip(
-                      message:
-                          '${_shortDate(day.date)}\n${day.completed} / ${day.total} prayers\n${_percent(day.rate)}',
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Text(
-                            '${day.completed}',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                          const SizedBox(height: 4),
-                          SizedBox(
-                            height: 120,
-                            child: Align(
-                              alignment: Alignment.bottomCenter,
-                              child: Container(
-                                height: day.total == 0 ? 0 : 120 * day.rate,
-                                constraints: const BoxConstraints(minHeight: 3),
-                                decoration: BoxDecoration(
-                                  color: primary,
-                                  borderRadius: const BorderRadius.vertical(
-                                    top: Radius.circular(4),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            _shortDate(day.date),
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+              Text('0%', style: Theme.of(context).textTheme.labelSmall),
+              Text('100%', style: Theme.of(context).textTheme.labelSmall),
             ],
           ),
-        ),
+          if (buckets.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              '${_shortDate(buckets.first.startDate)} – ${_shortDate(buckets.last.endDate)}',
+              style: Theme.of(context).textTheme.labelSmall
+                  ?.copyWith(color: colors.onSurface.withValues(alpha: 0.72)),
+            ),
+          ],
+          const SizedBox(height: 6),
+          Semantics(
+            label: buckets
+                .map(
+                  (bucket) =>
+                      '${_chartDateRange(bucket)}: ${bucket.completed} of ${bucket.total} prayer hours, ${_percent(bucket.rate)}',
+                )
+                .join('. '),
+            child: ExcludeSemantics(
+              child: SizedBox(
+                height: 154,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    for (var index = 0; index < buckets.length; index++)
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 2),
+                          child: Tooltip(
+                            message: localizedText(
+                              language,
+                              '${_chartDateRange(buckets[index])}\n${buckets[index].completed} / ${buckets[index].total} የጸሎት ሰዓቶች\n${_percent(buckets[index].rate)}',
+                              '${_chartDateRange(buckets[index])}\n${buckets[index].completed} / ${buckets[index].total} prayer hours\n${_percent(buckets[index].rate)} complete',
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                SizedBox(
+                                  height: 112,
+                                  child: Align(
+                                    alignment: Alignment.bottomCenter,
+                                    child: SizedBox(
+                                      width: 18,
+                                      height: 112,
+                                      child: Stack(
+                                        alignment: Alignment.bottomCenter,
+                                        children: [
+                                          Positioned.fill(
+                                            child: DecoratedBox(
+                                              decoration: BoxDecoration(
+                                                color: colors.primary
+                                                    .withValues(alpha: 0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(5),
+                                              ),
+                                            ),
+                                          ),
+                                          if (buckets[index].rate > 0)
+                                            Container(
+                                              height: 112 * buckets[index].rate,
+                                              decoration: BoxDecoration(
+                                                color:
+                                                    index == buckets.length - 1
+                                                    ? colors.secondary
+                                                    : colors.primary,
+                                                borderRadius:
+                                                    BorderRadius.circular(5),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  height: 18,
+                                  child: Text(
+                                    _chartTick(
+                                      buckets[index],
+                                      summary.rangeDays,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.clip,
+                                    textAlign: TextAlign.center,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -350,11 +656,13 @@ class _StreakCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _Highlight(
+            icon: Icons.star_outline,
             label: localizedText(language, 'ምርጥ ቀን', 'Best Day'),
             value: bestText,
           ),
           const Divider(height: 24),
           _Highlight(
+            icon: Icons.trending_up,
             label: localizedText(language, 'በጣም የተለመደ ጸሎት', 'Most Consistent'),
             value: _performanceLabel(
               summary,
@@ -364,6 +672,7 @@ class _StreakCard extends StatelessWidget {
           ),
           const Divider(height: 24),
           _Highlight(
+            icon: Icons.info_outline,
             label: localizedText(language, 'ትኩረት የሚፈልግ', 'Needs Attention'),
             value: _performanceLabel(
               summary,
@@ -387,42 +696,91 @@ class _PerformanceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return _Panel(
-      title: localizedText(language, 'የጸሎት አፈጻጸም', 'Prayer Performance'),
+      title: localizedText(language, 'የጸሎት ሰዓት እድገት', 'Prayer-hour progress'),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (var index = 0; index < summary.prayerPerformance.length; index++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 94,
-                    child: Text(
-                      localizedText(language, hours[index].ge, hours[index].en),
-                    ),
+          for (
+            var index = 0;
+            index < summary.prayerPerformance.length && index < hours.length;
+            index++
+          ) ...[
+            if (index > 0) const SizedBox(height: 14),
+            Builder(
+              builder: (context) {
+                final performance = summary.prayerPerformance[index];
+                final hourName = localizedText(
+                  language,
+                  _prayerHourNamesAmharic[index],
+                  hours[index].en,
+                );
+                final percent = _percent(performance.rate);
+                return Semantics(
+                  label: localizedText(
+                    language,
+                    '$hourName፦ ${performance.completed} ከ ${performance.expected}፣ $percent',
+                    '$hourName: ${performance.completed} of ${performance.expected}, $percent',
                   ),
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        minHeight: 9,
-                        value: summary.prayerPerformance[index].rate,
-                        backgroundColor: colors.onSurface.withValues(
-                          alpha: 0.1,
+                  child: ExcludeSemantics(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                hourName,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      fontFamily: language == 'eth'
+                                          ? 'AbyssinicaSIL'
+                                          : null,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              localizedText(
+                                language,
+                                '${performance.completed} ከ ${performance.expected}',
+                                '${performance.completed} of ${performance.expected}',
+                              ),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            const SizedBox(width: 10),
+                            SizedBox(
+                              width: 42,
+                              child: Text(
+                                percent,
+                                textAlign: TextAlign.end,
+                                style: Theme.of(context).textTheme.labelLarge,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
+                        const SizedBox(height: 7),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(5),
+                          child: LinearProgressIndicator(
+                            minHeight: 9,
+                            value: performance.rate.clamp(0.0, 1.0),
+                            color: colors.primary,
+                            backgroundColor: colors.onSurface.withValues(
+                              alpha: 0.1,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  SizedBox(
-                    width: 52,
-                    child: Text(
-                      _percent(summary.prayerPerformance[index].rate),
-                      textAlign: TextAlign.end,
-                    ),
-                  ),
-                ],
-              ),
+                );
+              },
             ),
+          ],
         ],
       ),
     );
@@ -454,51 +812,80 @@ class _Panel extends StatelessWidget {
 }
 
 class _Highlight extends StatelessWidget {
-  const _Highlight({required this.label, required this.value});
+  const _Highlight({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
 
+  final IconData icon;
   final String label;
   final String value;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(label, style: Theme.of(context).textTheme.bodyMedium),
-      const SizedBox(height: 4),
-      Text(value, style: Theme.of(context).textTheme.titleMedium),
-    ],
-  );
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 20, color: colors.secondary),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: Theme.of(context).textTheme.bodyMedium),
+              const SizedBox(height: 3),
+              Text(
+                value,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: colors.onSurface,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
 
-class _NoPrayerHistory extends StatelessWidget {
-  const _NoPrayerHistory({required this.language});
-
-  final String language;
-
-  @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Text(localizedText(
-        language,
-        'የጸሎት ታሪክዎ እዚህ ይታያል። ለመጀመር የጸሎት ሰዓትን ያጠናቅቁ።',
-        'Prayer history will appear here as you mark prayer hours complete.',
-      )),
-    ),
-  );
-}
-
-class _MetaniaAnalysis extends StatelessWidget {
+class _MetaniaAnalysis extends StatefulWidget {
   const _MetaniaAnalysis({required this.rangeDays, required this.language});
 
   final int rangeDays;
   final String language;
 
-  Future<List<int>> _loadTotals() async {
+  @override
+  State<_MetaniaAnalysis> createState() => _MetaniaAnalysisState();
+}
+
+class _MetaniaAnalysisState extends State<_MetaniaAnalysis> {
+  late Future<List<int>> _totalsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _totalsFuture = _loadTotals(widget.rangeDays);
+  }
+
+  @override
+  void didUpdateWidget(covariant _MetaniaAnalysis oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.rangeDays != widget.rangeDays) {
+      _totalsFuture = _loadTotals(widget.rangeDays);
+    }
+  }
+
+  Future<List<int>> _loadTotals(int rangeDays) async {
     final preferences = await SharedPreferences.getInstance();
     final now = DateTime.now();
-    final firstDay = DateTime(now.year, now.month, now.day)
-        .subtract(Duration(days: rangeDays - 1));
+    final firstDay = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(Duration(days: rangeDays - 1));
     final totals = List<int>.filled(hours.length, 0);
     for (var dayIndex = 0; dayIndex < rangeDays; dayIndex++) {
       final date = firstDay.add(Duration(days: dayIndex));
@@ -513,11 +900,13 @@ class _MetaniaAnalysis extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final rangeDays = widget.rangeDays;
+    final language = widget.language;
     final colors = Theme.of(context).colorScheme;
     return _Panel(
       title: localizedText(language, 'የስግደት ትንተና', 'Metania progress'),
       child: FutureBuilder<List<int>>(
-        future: _loadTotals(),
+        future: _totalsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Padding(
@@ -535,111 +924,183 @@ class _MetaniaAnalysis extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: colors.primaryContainer.withValues(alpha: 0.45),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      localizedText(language, 'ጠቅላላ ስግደት', 'Total Metania'),
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                    const SizedBox(height: 5),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+              Row(
+                children: [
+                  Icon(Icons.self_improvement, color: colors.secondary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '$total',
-                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                color: colors.primary,
-                                fontWeight: FontWeight.w700,
-                              ),
+                          localizedText(language, 'ጠቅላላ ስግደት', 'Total Metania'),
+                          style: Theme.of(context).textTheme.bodyMedium,
                         ),
-                        const SizedBox(width: 6),
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 5),
-                          child: Text(
-                            localizedText(language, 'በ $rangeDays ቀን', 'in $rangeDays days'),
-                            style: Theme.of(context).textTheme.bodySmall,
+                        Text(
+                          localizedText(
+                            language,
+                            'በ $rangeDays ቀን',
+                            'Across $rangeDays days',
                           ),
+                          style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(99),
-                      child: LinearProgressIndicator(
-                        value: totalProgress,
-                        minHeight: 7,
-                        backgroundColor: colors.onPrimaryContainer.withValues(alpha: 0.12),
-                      ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    '$total',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: colors.onSurface,
+                      fontWeight: FontWeight.w700,
                     ),
-                    const SizedBox(height: 7),
-                    Text(
-                      localizedText(
-                        language,
-                        'የግብ እድገት: ${(totalProgress * 100).round()}%  ·  $total / $totalTarget',
-                        'Goal progress: ${(totalProgress * 100).round()}%  ·  $total / $totalTarget',
-                      ),
-                      style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Semantics(
+                label: localizedText(
+                  language,
+                  'የግብ እድገት ${(totalProgress * 100).round()} በመቶ፣ $total ከ $totalTarget',
+                  'Metania goal progress ${_percent(totalProgress)}, $total of $totalTarget',
+                ),
+                child: ExcludeSemantics(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(5),
+                    child: LinearProgressIndicator(
+                      value: totalProgress,
+                      minHeight: 9,
+                      color: colors.primary,
+                      backgroundColor: colors.onSurface.withValues(alpha: 0.1),
                     ),
-                  ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 7),
               Text(
                 localizedText(
                   language,
-                  'ቁጥሩ ከመጀመሪያው ጸሎት ጀምሮ ለእያንዳንዱ ሰዓት ተለይቶ ይታያል።',
-                  'Each hour has a goal of ${AppConstants.defaultMetaniaCount} per day. Hours are listed from Prime onward.',
+                  'የግብ እድገት: ${(totalProgress * 100).round()}%  ·  $total / $totalTarget',
+                  'Goal progress: ${(totalProgress * 100).round()}%  ·  $total / $totalTarget',
                 ),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
-              const SizedBox(height: 18),
-              for (var index = 0; index < hours.length; index++) ...[
-                if (index > 0) const SizedBox(height: 14),
-                Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '${index + 1}. ${localizedText(language, hours[index].ge, hours[index].en)}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodyMedium,
+              const SizedBox(height: 8),
+              Text(
+                localizedText(
+                  language,
+                  'የዕያንዳንዱ ሰዓት ግብ በቀን ${AppConstants.defaultMetaniaCount} ነው።',
+                  'The existing target is ${AppConstants.defaultMetaniaCount} per prayer hour per day.',
+                ),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 20),
+              Text(
+                localizedText(language, 'በጸሎት ሰዓት', 'By Prayer Hour'),
+                style: Theme.of(context).textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 14),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final columns = constraints.maxWidth >= 720 ? 2 : 1;
+                  const gap = 20.0;
+                  final width = columns == 1
+                      ? constraints.maxWidth
+                      : (constraints.maxWidth - gap) / columns;
+                  return Wrap(
+                    spacing: gap,
+                    runSpacing: 16,
+                    children: [
+                      for (var index = 0; index < hours.length; index++)
+                        SizedBox(
+                          width: width,
+                          child: _MetaniaHourRow(
+                            index: index,
+                            count: totals[index],
+                            target: targetPerHour,
+                            language: language,
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Text(
-                          '${totals[index]} / $targetPerHour',
-                          style: Theme.of(context).textTheme.labelMedium,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 7),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(99),
-                      child: LinearProgressIndicator(
-                        value: targetPerHour == 0
-                            ? 0
-                            : (totals[index] / targetPerHour)
-                                .clamp(0.0, 1.0)
-                                .toDouble(),
-                        minHeight: 7,
-                        backgroundColor: colors.primary.withValues(alpha: 0.12),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  );
+                },
+              ),
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _MetaniaHourRow extends StatelessWidget {
+  const _MetaniaHourRow({
+    required this.index,
+    required this.count,
+    required this.target,
+    required this.language,
+  });
+
+  final int index;
+  final int count;
+  final int target;
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final hourName = localizedText(
+      language,
+      _prayerHourNamesAmharic[index],
+      hours[index].en,
+    );
+    final progress = target == 0
+        ? 0.0
+        : (count / target).clamp(0.0, 1.0).toDouble();
+    return Semantics(
+      label: localizedText(
+        language,
+        '$hourName፦ $count ከ $target',
+        '$hourName: $count of $target',
+      ),
+      child: ExcludeSemantics(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    hourName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontFamily: language == 'eth' ? 'AbyssinicaSIL' : null,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  '$count / $target',
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+              ],
+            ),
+            const SizedBox(height: 7),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(5),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 8,
+                color: colors.primary,
+                backgroundColor: colors.onSurface.withValues(alpha: 0.1),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -649,23 +1110,64 @@ String _percent(double rate) => '${(rate * 100).round()}%';
 
 String _shortDate(DateTime date) => '${date.month}/${date.day}';
 
-List<DailyPrayerStatistic> _bucketDays(
-  List<DailyPrayerStatistic> days,
-  int buckets,
-) {
-  final result = <DailyPrayerStatistic>[];
-  final size = (days.length / buckets).ceil();
-  for (var start = 0; start < days.length; start += size) {
-    final group = days.skip(start).take(size).toList();
-    result.add(
-      DailyPrayerStatistic(
-        date: group.first.date,
-        completed: group.fold(0, (sum, day) => sum + day.completed),
-        total: group.fold(0, (sum, day) => sum + day.total),
-      ),
-    );
+class _ChartBucket {
+  const _ChartBucket({
+    required this.startDate,
+    required this.endDate,
+    required this.completed,
+    required this.total,
+  });
+
+  final DateTime startDate;
+  final DateTime endDate;
+  final int completed;
+  final int total;
+
+  double get rate => total == 0 ? 0 : completed / total;
+}
+
+List<_ChartBucket> _chartBuckets(List<DailyPrayerStatistic> days) {
+  if (days.length <= 14) {
+    return [
+      for (final day in days)
+        _ChartBucket(
+          startDate: day.date,
+          endDate: day.date,
+          completed: day.completed,
+          total: day.total,
+        ),
+    ];
   }
-  return result;
+
+  final bucketSize = (days.length / 7).ceil();
+  return _fixedChartBuckets(days, bucketSize);
+}
+
+List<_ChartBucket> _fixedChartBuckets(
+  List<DailyPrayerStatistic> days,
+  int periodLength,
+) => [
+  for (var start = 0; start < days.length; start += periodLength)
+    _makeChartBucket(
+      days.sublist(start, (start + periodLength).clamp(0, days.length)),
+    ),
+];
+
+_ChartBucket _makeChartBucket(List<DailyPrayerStatistic> days) => _ChartBucket(
+  startDate: days.first.date,
+  endDate: days.last.date,
+  completed: days.fold(0, (sum, day) => sum + day.completed),
+  total: days.fold(0, (sum, day) => sum + day.total),
+);
+
+String _chartDateRange(_ChartBucket bucket) =>
+    bucket.startDate == bucket.endDate
+    ? _shortDate(bucket.startDate)
+    : '${_shortDate(bucket.startDate)}–${_shortDate(bucket.endDate)}';
+
+String _chartTick(_ChartBucket bucket, int rangeDays) {
+  if (rangeDays <= 14) return '${bucket.startDate.day}';
+  return '${bucket.startDate.month}/${bucket.startDate.day}';
 }
 
 String _performanceLabel(

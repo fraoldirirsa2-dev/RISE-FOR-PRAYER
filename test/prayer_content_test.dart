@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rise_for_prayer/data/prayer_content.dart';
+import 'package:rise_for_prayer/features/weekly_prayer_rule/weekly_prayer_rule.dart';
 
 void main() {
   test('provides typed content for all seven canonical hours', () {
@@ -46,6 +47,19 @@ void main() {
           .every((reference) => reference.bookId == 'psalms'),
       isTrue,
     );
+  });
+
+  test('provides a Psalm for every weekday and prayer hour', () {
+    expect(weeklyPrayerRule, hasLength(7));
+    for (final day in weeklyPrayerRule) {
+      expect(day, hasLength(7));
+      for (final hour in day) {
+        expect([
+          ...hour.psalmChapters,
+          ...hour.midnightPsalmChapters,
+        ], isNotEmpty);
+      }
+    }
   });
 
   test('rotates Scripture per hour while staying stable for the same day', () {
