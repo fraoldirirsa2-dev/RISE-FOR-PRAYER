@@ -1,4 +1,6 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rise_for_prayer/data/prayer_content.dart';
 import 'package:rise_for_prayer/features/weekly_prayer_rule/weekly_prayer_rule.dart';
 
@@ -19,6 +21,71 @@ void main() {
         ),
       ),
       isTrue,
+    );
+  });
+
+  testWidgets('opening prayer omits the Marian prayer in English', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: WeeklyPrayerRuleReading(day: 0, hour: 0, language: 'en'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final openingPrayer = find
+        .ancestor(
+          of: find.text('Opening Prayer'),
+          matching: find.byType(Container),
+        )
+        .first;
+    expect(
+      find.descendant(of: openingPrayer, matching: find.text('Marian prayer')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: openingPrayer,
+        matching: find.textContaining('O my Lady Mary I salute you'),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('opening prayer omits the Marian prayer in Amharic', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: WeeklyPrayerRuleReading(day: 0, hour: 0, language: 'eth'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final openingPrayer = find
+        .ancestor(of: find.text('መክፈቻ ጸሎት'), matching: find.byType(Container))
+        .first;
+    expect(
+      find.descendant(of: openingPrayer, matching: find.text('የማርያም ጸሎት')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: openingPrayer,
+        matching: find.textContaining('እመቤታችን ቅድስት ድንግል ማርያም ሆይ'),
+      ),
+      findsNothing,
     );
   });
 

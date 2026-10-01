@@ -688,6 +688,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 }
 
 String _notificationErrorText(String error, String language) {
+  if (error.length > 180 ||
+      error.contains('PlatformException') ||
+      error.contains('Missing type parameter') ||
+      error.contains('r8-map-id')) {
+    return localizedText(
+      language,
+      'የማሳሰቢያ ቅንብር አልተሳካም። አፕሊኬሽኑን ዝግተው እንደገና ይክፈቱ።',
+      'Reminder setup failed. Close and reopen the app, then try again.',
+    );
+  }
   if (language == 'en') return error;
   if (error.contains('permission')) {
     return 'የማሳወቂያ ፈቃድ ስላልተሰጠ ማሳሰቢያዎች ተዘግተዋል።';

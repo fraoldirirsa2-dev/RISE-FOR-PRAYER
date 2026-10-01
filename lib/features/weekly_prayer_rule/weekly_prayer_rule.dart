@@ -101,14 +101,7 @@ class WeeklyPrayerRuleReading extends StatelessWidget {
         block(localizedText(language, 'መክፈቻ ጸሎት', 'Opening Prayer'), [
           _prayerQuote(
             localizedText(language, 'አቡነ ዘበሰማያት', 'Abune Zebesemayat'),
-            language == 'eth' ? _common : _commonEnglish,
-            prayerTextStyle,
-            colors,
-          ),
-          const SizedBox(height: 12),
-          _prayerQuote(
-            localizedText(language, 'የማርያም ጸሎት', 'Marian prayer'),
-            language == 'eth' ? _marianPrayer : _marianPrayerEnglish,
+            _openingPrayerText(language),
             prayerTextStyle,
             colors,
           ),
@@ -448,6 +441,13 @@ const String _closingOurFather = '''
 const String _closingMarianPrayer = '''
 እመቤታችን ቅድስት ድንግል ማርያም ሆይ በመልአኩ በቅዱስ ገብርኤል ሰላምታ ሰላም እልሻለሁ። በሀሳብሽ ድንግል ነሽ በሥጋሽም ድንግል ነሽ። የአቸናፊ የእግዚአብሔር እናት ሆይ ለአንቺ ሰላምታ ይገባል ከሴቶቹ ሁሉ ተለይተሽ አንቺ የተባረክሽ ነሽና የማኅፀንሽም ፍሬ የተባረከ ነው። ጸጋን የተመላሽ ሆይ ደስ ይበልሽ እግዚአብሔር ከአንቺ ጋር ነውና ከተወደደው ልጅሽ ከጌታችን ከመድኃኒታችን ከኢየሱስ ክርስቶስ ዘንድ ይቅርታንና ምሕረትን ለምኝልን ኃጢአታችንንም ያስተሠርይልን ዘንድ ለዘለዓለሙ አሜን።
 ''';
+
+String _openingPrayerText(String language) {
+  final isAmharic = language == 'eth';
+  final commonPrayer = isAmharic ? _common : _commonEnglish;
+  final marianPrayer = isAmharic ? _marianPrayer : _marianPrayerEnglish;
+  return commonPrayer.replaceFirst(marianPrayer, '').trim();
+}
 
 const String _closingOurFatherEnglish = '''
 Our father who art in heaven, hollowed be they name, thy Kingdom come, thy will be done in earth as it is in heaven: give us this day our daily bread and forgive us our trespasses as we forgive them that trespass against us, and lead us not into temptation but deliver us and rescue us from all evil for thine is the kingdom, the power and the. Glory for even and ever. AMEN
@@ -1022,17 +1022,7 @@ class _RuleSessionScreenState extends ConsumerState<RuleSessionScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          isEnglish ? _commonEnglish : _common,
-                          style: isEnglish
-                              ? GoogleFonts.ebGaramond(
-                                  fontSize: textSize,
-                                  height: 1.7,
-                                )
-                              : ethiopic(size: textSize),
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          isEnglish ? _marianPrayerEnglish : _marianPrayer,
+                          _openingPrayerText(language),
                           style: isEnglish
                               ? GoogleFonts.ebGaramond(
                                   fontSize: textSize,

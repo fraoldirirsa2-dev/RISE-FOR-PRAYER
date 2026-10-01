@@ -55,9 +55,8 @@ android {
         release {
             signingConfig = signingConfigs.getByName("release")
 
-            // Keep R8 from stripping plugin classes that are used via reflection.
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
