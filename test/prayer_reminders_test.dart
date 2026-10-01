@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rise_for_prayer/data/prayer_reminders.dart';
+import 'package:rise_for_prayer/services/notification_service.dart';
 
 void main() {
   test('defines seven stable daily reminders from prayer data', () {
@@ -23,5 +26,18 @@ void main() {
       ),
       isTrue,
     );
+  });
+
+  test('uses an existing Android notification icon resource', () {
+    final iconFile = File(
+      'android/app/src/main/res/drawable/ic_notification.xml',
+    );
+
+    expect(
+      iconFile.existsSync(),
+      isTrue,
+      reason: 'The Android notification icon resource must exist.',
+    );
+    expect(NotificationService.androidNotificationIconName, 'ic_notification');
   });
 }

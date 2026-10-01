@@ -25,18 +25,33 @@ class NotificationService {
 
   static bool get notificationsEnabled => _notificationsEnabled;
 
+  // Compatibility getter used by settings/provider code.
+  static bool get isAvailable => _notificationsEnabled;
+
   static String? get lastError => _lastError;
 
+  // Your Android applicationId from android/app/build.gradle.kts
   static const String androidPackageName = 'com.example.thelot_2';
 
-  static const String _androidIconName = 'notification_icon';
+  // Android notification icon:
+  // android/app/src/main/res/drawable/ic_notification.xml
+  // Use a resource that is actually present in the app so Android does not
+  // throw PlatformException(invalid_icon).
+  static const String _androidIconName = 'ic_notification';
+
+  static String get androidNotificationIconName => _androidIconName;
+
+  // Android sound:
+  // android/app/src/main/res/raw/a.mp3
   static const String _androidRawSoundName = 'a';
+
+  // iOS sound
   static const String _iosSoundName = 'a.mp3';
 
+  // Ethiopia / Addis Ababa
   static const String _timezoneName = 'Africa/Addis_Ababa';
 
-  // Use new channel IDs so Android does not keep the settings
-  // from old/broken notification channels.
+  // New channel IDs so old Android channel settings don't interfere.
   static const String _soundVibrateChannel =
       'prayer_reminders_sound_vibrate_v2';
 
@@ -59,7 +74,6 @@ class NotificationService {
     'መንፈቀ ሌሊት',
   ];
 
-  /// Called when the user taps a prayer notification.
   static void Function(int prayerIndex)? onPrayerNotificationTap;
 
   // ---------------------------------------------------------------------------
@@ -68,7 +82,7 @@ class NotificationService {
 
   static Future<void> initialize() {
     if (_initialized) {
-      return Future.value();
+      return Future<void>.value();
     }
 
     return _initialization ??= _initializeInternal();
@@ -76,13 +90,12 @@ class NotificationService {
 
   static Future<void> _initializeInternal() async {
     try {
-      if (_initialized) {
-        return;
-      }
+      if (_initialized) return;
 
       // Initialize timezone database.
       tz.initializeTimeZones();
 
+      // Set Addis Ababa timezone.
       try {
         tz.setLocalLocation(tz.getLocation(_timezoneName));
       } catch (error) {
@@ -91,13 +104,15 @@ class NotificationService {
 
       const androidSettings = AndroidInitializationSettings(_androidIconName);
 
+      const iosSettings = DarwinInitializationSettings(
+        requestAlertPermission: false,
+        requestBadgePermission: false,
+        requestSoundPermission: false,
+      );
+
       final initializationSettings = InitializationSettings(
         android: androidSettings,
-        iOS: const DarwinInitializationSettings(
-          requestAlertPermission: false,
-          requestBadgePermission: false,
-          requestSoundPermission: false,
-        ),
+        iOS: iosSettings,
       );
 
       await _plugin.initialize(
@@ -110,10 +125,8 @@ class NotificationService {
 
       _initialized = true;
 
-      // Read launch notification information.
       await checkLaunchNotification();
 
-      // Read current notification permission.
       await refreshNotificationPermissionStatus();
 
       debugPrint('NotificationService initialized successfully.');
@@ -121,6 +134,7 @@ class NotificationService {
       _lastError = error.toString();
 
       debugPrint('NotificationService initialization error: $error');
+
       debugPrintStack(stackTrace: stackTrace);
 
       rethrow;
@@ -128,7 +142,7 @@ class NotificationService {
   }
 
   // ---------------------------------------------------------------------------
-  // PERMISSIONS
+  // PERMISSION STATUS
   // ---------------------------------------------------------------------------
 
   static Future<bool> refreshNotificationPermissionStatus() async {
@@ -146,24 +160,27 @@ class NotificationService {
       if (android != null) {
         final enabled = await android.areNotificationsEnabled();
 
-        // On older Android/plugin combinations this can be null.
-        // Null should not automatically mean "permission denied".
+        // On older Android versions a null result should not
+        // incorrectly disable notifications.
         _notificationsEnabled = enabled ?? true;
 
-        debugPrint('Android notification enabled: $_notificationsEnabled');
+        debugPrint(
+          'Android notifications enabled: '
+          '$_notificationsEnabled',
+        );
 
         return _notificationsEnabled;
       }
 
       final ios = _plugin
           .resolvePlatformSpecificImplementation<
-            DarwinFlutterLocalNotificationsPlugin
+            IOSFlutterLocalNotificationsPlugin
           >();
 
       if (ios != null) {
-        final settings = await ios.checkPermissions();
+        final permissions = await ios.checkPermissions();
 
-        _notificationsEnabled = settings?.isEnabled ?? true;
+        _notificationsEnabled = permissions?.isEnabled ?? true;
 
         return _notificationsEnabled;
       }
@@ -173,12 +190,21 @@ class NotificationService {
     } catch (error) {
       debugPrint('Could not read notification permission: $error');
 
-      // Do not falsely mark Android <13 as disabled.
+      // Avoid falsely reporting unavailable on older devices.
       _notificationsEnabled = true;
 
       return true;
     }
   }
+
+  // Compatibility alias.
+  static Future<bool> refreshPermissionStatus() {
+    return refreshNotificationPermissionStatus();
+  }
+
+  // ---------------------------------------------------------------------------
+  // REQUEST PERMISSION
+  // ---------------------------------------------------------------------------
 
   static Future<bool> requestPermissions({
     bool requestExactAlarms = false,
@@ -200,15 +226,17 @@ class NotificationService {
         final result = await android.requestNotificationsPermission();
 
         if (result == null) {
-          // Older Android versions may return null because
-          // POST_NOTIFICATIONS runtime permission does not apply.
           final current = await android.areNotificationsEnabled();
+
           _notificationsEnabled = current ?? true;
         } else {
           _notificationsEnabled = result;
         }
 
-        debugPrint('Notification permission result: $_notificationsEnabled');
+        debugPrint(
+          'Notification permission: '
+          '$_notificationsEnabled',
+        );
 
         if (requestExactAlarms) {
           await requestExactAlarmPermission();
@@ -219,7 +247,7 @@ class NotificationService {
 
       final ios = _plugin
           .resolvePlatformSpecificImplementation<
-            DarwinFlutterLocalNotificationsPlugin
+            IOSFlutterLocalNotificationsPlugin
           >();
 
       if (ios != null) {
@@ -230,15 +258,18 @@ class NotificationService {
         );
 
         _notificationsEnabled = result ?? true;
+
         return _notificationsEnabled;
       }
 
       _notificationsEnabled = true;
+
       return true;
     } catch (error, stackTrace) {
       _lastError = error.toString();
 
       debugPrint('Notification permission request error: $error');
+
       debugPrintStack(stackTrace: stackTrace);
 
       await refreshNotificationPermissionStatus();
@@ -247,7 +278,7 @@ class NotificationService {
     }
   }
 
-  /// Compatibility alias.
+  // Compatibility alias.
   static Future<bool> requestPermission({bool requestExactAlarms = false}) {
     return requestPermissions(requestExactAlarms: requestExactAlarms);
   }
@@ -257,9 +288,7 @@ class NotificationService {
   // ---------------------------------------------------------------------------
 
   static Future<bool> canScheduleExactNotifications() async {
-    if (kIsWeb) {
-      return false;
-    }
+    if (kIsWeb) return false;
 
     try {
       final android = _plugin
@@ -267,23 +296,20 @@ class NotificationService {
             AndroidFlutterLocalNotificationsPlugin
           >();
 
-      if (android == null) {
-        return false;
-      }
+      if (android == null) return false;
 
       final result = await android.canScheduleExactNotifications();
 
       return result ?? false;
     } catch (error) {
-      debugPrint('Exact alarm status check failed: $error');
+      debugPrint('Exact alarm check failed: $error');
+
       return false;
     }
   }
 
   static Future<bool> requestExactAlarmPermission() async {
-    if (kIsWeb) {
-      return false;
-    }
+    if (kIsWeb) return false;
 
     try {
       final android = _plugin
@@ -291,13 +317,11 @@ class NotificationService {
             AndroidFlutterLocalNotificationsPlugin
           >();
 
-      if (android == null) {
-        return false;
-      }
+      if (android == null) return false;
 
-      final current = await android.canScheduleExactNotifications();
+      final alreadyGranted = await android.canScheduleExactNotifications();
 
-      if (current == true) {
+      if (alreadyGranted == true) {
         return true;
       }
 
@@ -305,11 +329,15 @@ class NotificationService {
 
       final after = await android.canScheduleExactNotifications();
 
-      debugPrint('Exact alarm permission: requested=$result, granted=$after');
+      debugPrint(
+        'Exact alarm permission: '
+        'requested=$result, granted=$after',
+      );
 
       return after ?? result ?? false;
     } catch (error) {
       debugPrint('Exact alarm permission request failed: $error');
+
       return false;
     }
   }
@@ -325,7 +353,7 @@ class NotificationService {
   }
 
   // ---------------------------------------------------------------------------
-  // CHANNELS
+  // ANDROID CHANNELS
   // ---------------------------------------------------------------------------
 
   static Future<void> _createNotificationChannels() async {
@@ -334,11 +362,10 @@ class NotificationService {
           AndroidFlutterLocalNotificationsPlugin
         >();
 
-    if (android == null) {
-      return;
-    }
+    if (android == null) return;
 
     try {
+      // Sound + vibration
       await android.createNotificationChannel(
         AndroidNotificationChannel(
           _soundVibrateChannel,
@@ -354,6 +381,7 @@ class NotificationService {
         ),
       );
 
+      // Sound only
       await android.createNotificationChannel(
         AndroidNotificationChannel(
           _soundSilentChannel,
@@ -369,6 +397,7 @@ class NotificationService {
         ),
       );
 
+      // Vibration only
       await android.createNotificationChannel(
         AndroidNotificationChannel(
           _silentVibrateChannel,
@@ -381,6 +410,7 @@ class NotificationService {
         ),
       );
 
+      // Silent
       await android.createNotificationChannel(
         AndroidNotificationChannel(
           _silentChannel,
@@ -393,14 +423,15 @@ class NotificationService {
         ),
       );
 
-      debugPrint('Notification channels created.');
+      debugPrint('Notification channels created successfully.');
     } catch (error, stackTrace) {
       _customSoundAvailable = false;
 
       debugPrint('Custom notification sound unavailable: $error');
+
       debugPrintStack(stackTrace: stackTrace);
 
-      // Create silent channels as a safe fallback.
+      // Fallback channels without custom sound.
       try {
         await android.createNotificationChannel(
           const AndroidNotificationChannel(
@@ -426,7 +457,10 @@ class NotificationService {
           ),
         );
       } catch (fallbackError) {
-        debugPrint('Fallback channel creation failed: $fallbackError');
+        debugPrint(
+          'Fallback notification channels failed: '
+          '$fallbackError',
+        );
       }
     }
   }
@@ -435,7 +469,13 @@ class NotificationService {
   // TEST NOTIFICATION
   // ---------------------------------------------------------------------------
 
-  static Future<bool> showTestNotification() async {
+  static Future<bool> showTestNotification({
+    String? title,
+    String? body,
+    bool vibrationEnabled = true,
+    bool soundEnabled = true,
+    String language = 'en',
+  }) async {
     await initialize();
 
     var enabled = await refreshNotificationPermissionStatus();
@@ -445,26 +485,43 @@ class NotificationService {
     }
 
     if (!enabled) {
-      debugPrint('Test notification cancelled: notifications are disabled.');
+      _lastError = 'Notification permission is disabled.';
+
       return false;
     }
 
     try {
-      await _plugin.show(
-        _testNotificationId,
-        'ለጸሎት ተነሱ',
-        'ይህ የማሳወቂያ ሙከራ ነው።',
-        _notificationDetails(sound: true, vibration: true),
-        payload: jsonEncode({'prayerId': 0}),
+      final parsedTitle = _selectLanguageText(
+        title,
+        language,
+        fallbackAmharic: 'የጸሎት ማሳሰቢያ ሙከራ',
+        fallbackEnglish: 'Prayer reminder test',
       );
 
-      debugPrint('Test notification sent.');
+      final parsedBody = _selectLanguageText(
+        body,
+        language,
+        fallbackAmharic: 'ማሳሰቢያዎች እንዴት እንደሚሰሙ ለመፈተሽ ነው።',
+        fallbackEnglish:
+            'This checks your reminder sound and vibration settings.',
+      );
+
+      await _plugin.show(
+        _testNotificationId,
+        parsedTitle,
+        parsedBody,
+        _notificationDetails(sound: soundEnabled, vibration: vibrationEnabled),
+        payload: jsonEncode({'prayerId': 0, 'test': true}),
+      );
+
+      debugPrint('Test notification sent successfully.');
 
       return true;
     } catch (error, stackTrace) {
       _lastError = error.toString();
 
       debugPrint('Test notification failed: $error');
+
       debugPrintStack(stackTrace: stackTrace);
 
       return false;
@@ -472,7 +529,131 @@ class NotificationService {
   }
 
   // ---------------------------------------------------------------------------
-  // SCHEDULE PRAYER REMINDER
+  // DAILY REMINDER
+  // ---------------------------------------------------------------------------
+
+  static Future<bool> scheduleDailyReminder({
+    required int id,
+    required String title,
+    required String body,
+    required int hour,
+    required int minute,
+    bool vibrationEnabled = true,
+    bool soundEnabled = true,
+    Duration reminderOffset = Duration.zero,
+    String language = 'en',
+    int? prayerIndex,
+  }) async {
+    await initialize();
+
+    if (hour < 0 || hour > 23) {
+      _lastError = 'Invalid reminder hour: $hour';
+
+      return false;
+    }
+
+    if (minute < 0 || minute > 59) {
+      _lastError = 'Invalid reminder minute: $minute';
+
+      return false;
+    }
+
+    const allowedOffsets = <int>{0, 5, 10, 15};
+
+    if (!allowedOffsets.contains(reminderOffset.inMinutes)) {
+      _lastError = 'Reminder offset must be 0, 5, 10 or 15 minutes.';
+
+      return false;
+    }
+
+    if (!await refreshNotificationPermissionStatus()) {
+      _lastError = 'Notification permission is disabled.';
+
+      return false;
+    }
+
+    try {
+      final now = tz.TZDateTime.now(tz.local);
+
+      var scheduledDate = tz.TZDateTime(
+        tz.local,
+        now.year,
+        now.month,
+        now.day,
+        hour,
+        minute,
+      );
+
+      // Apply reminder offset.
+      scheduledDate = scheduledDate.subtract(reminderOffset);
+
+      // If today's reminder time has already passed,
+      // schedule the next occurrence tomorrow.
+      if (!scheduledDate.isAfter(now)) {
+        scheduledDate = tz.TZDateTime(
+          tz.local,
+          now.year,
+          now.month,
+          now.day + 1,
+          scheduledDate.hour,
+          scheduledDate.minute,
+          0,
+        );
+      }
+
+      final parsedTitle = _selectLanguageText(
+        title,
+        language,
+        fallbackAmharic: 'የጸሎት ማሳሰቢያ',
+        fallbackEnglish: 'Prayer reminder',
+      );
+
+      final parsedBody = _selectLanguageText(
+        body,
+        language,
+        fallbackAmharic: 'የጸሎት ጊዜ ደርሷል።',
+        fallbackEnglish: 'It is time for prayer.',
+      );
+
+      final payload = jsonEncode({
+        'prayerId': prayerIndex ?? 0,
+        'reminderMinutes': reminderOffset.inMinutes,
+      });
+
+      await _scheduleZoned(
+        id: id,
+        title: parsedTitle,
+        body: parsedBody,
+        scheduledDate: scheduledDate,
+        details: _notificationDetails(
+          sound: soundEnabled,
+          vibration: vibrationEnabled,
+        ),
+        payload: payload,
+      );
+
+      debugPrint(
+        'Daily reminder scheduled: '
+        'id=$id '
+        'time=$scheduledDate '
+        'offset=${reminderOffset.inMinutes} '
+        'prayerIndex=$prayerIndex',
+      );
+
+      return true;
+    } catch (error, stackTrace) {
+      _lastError = error.toString();
+
+      debugPrint('Daily reminder scheduling failed: $error');
+
+      debugPrintStack(stackTrace: stackTrace);
+
+      return false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // SINGLE PRAYER REMINDER
   // ---------------------------------------------------------------------------
 
   static Future<bool> schedulePrayerReminder({
@@ -484,88 +665,37 @@ class NotificationService {
     String? title,
     String? body,
   }) async {
-    await initialize();
-
     if (prayerIndex < 0 || prayerIndex >= 7) {
-      debugPrint('Invalid prayer index: $prayerIndex');
+      _lastError = 'Invalid prayer index: $prayerIndex';
+
       return false;
     }
 
     if (![0, 5, 10, 15].contains(reminderMinutes)) {
-      debugPrint('Invalid reminder offset: $reminderMinutes');
-      return false;
-    }
-
-    if (!await refreshNotificationPermissionStatus()) {
-      debugPrint('Cannot schedule prayer reminder: notifications disabled.');
-      return false;
-    }
-
-    final now = tz.TZDateTime.now(tz.local);
-
-    var scheduledTime = tz.TZDateTime.from(
-      prayerTime,
-      tz.local,
-    ).subtract(Duration(minutes: reminderMinutes));
-
-    // If this occurrence has already passed, schedule tomorrow.
-    if (!scheduledTime.isAfter(now)) {
-      scheduledTime = tz.TZDateTime(
-        tz.local,
-        scheduledTime.year,
-        scheduledTime.month,
-        scheduledTime.day + 1,
-        scheduledTime.hour,
-        scheduledTime.minute,
-        scheduledTime.second,
-      );
-    }
-
-    final id = notificationId(prayerIndex, reminderMinutes);
-
-    final notificationTitle = title ?? _defaultTitle(prayerIndex);
-
-    final notificationBody = body ?? _defaultBody(prayerIndex, reminderMinutes);
-
-    final details = _notificationDetails(sound: sound, vibration: vibration);
-
-    try {
-      final mode = await _getScheduleMode();
-
-      await _zonedScheduleWithFallback(
-        id: id,
-        title: notificationTitle,
-        body: notificationBody,
-        scheduledDate: scheduledTime,
-        details: details,
-        payload: jsonEncode({
-          'prayerId': prayerIndex,
-          'reminderMinutes': reminderMinutes,
-        }),
-        scheduleMode: mode,
-      );
-
-      debugPrint(
-        'Scheduled prayer $prayerIndex '
-        '($notificationTitle) '
-        'at $scheduledTime '
-        'offset=$reminderMinutes '
-        'mode=$mode',
-      );
-
-      return true;
-    } catch (error, stackTrace) {
-      _lastError = error.toString();
-
-      debugPrint('Failed to schedule prayer $prayerIndex: $error');
-      debugPrintStack(stackTrace: stackTrace);
+      _lastError = 'Invalid reminder offset: $reminderMinutes';
 
       return false;
     }
+
+    return scheduleDailyReminder(
+      id: notificationId(prayerIndex, reminderMinutes),
+      title: title ?? '${_prayerNames[prayerIndex]} • የጸሎት ጊዜ',
+      body:
+          body ??
+          (reminderMinutes == 0
+              ? 'የጸሎት ጊዜ ደርሷል።'
+              : 'የጸሎት ጊዜ ከ$reminderMinutes ደቂቃ በኋላ ነው።'),
+      hour: prayerTime.hour,
+      minute: prayerTime.minute,
+      vibrationEnabled: vibration,
+      soundEnabled: sound,
+      reminderOffset: Duration(minutes: reminderMinutes),
+      prayerIndex: prayerIndex,
+    );
   }
 
   // ---------------------------------------------------------------------------
-  // SCHEDULE ALL PRAYER REMINDERS
+  // ALL SEVEN PRAYER REMINDERS
   // ---------------------------------------------------------------------------
 
   static Future<void> scheduleAllPrayerReminders({
@@ -574,11 +704,11 @@ class NotificationService {
     bool sound = true,
     bool vibration = true,
   }) async {
-    await initialize();
-
     if (prayerTimes.length < 7) {
       throw ArgumentError('Seven prayer times are required.');
     }
+
+    await initialize();
 
     if (!await refreshNotificationPermissionStatus()) {
       final granted = await requestPermissions();
@@ -588,18 +718,10 @@ class NotificationService {
       }
     }
 
-    // Cancel old reminders for this offset first.
-    for (var prayerIndex = 0; prayerIndex < 7; prayerIndex++) {
-      await cancelPrayerReminder(
-        prayerIndex: prayerIndex,
-        reminderMinutes: reminderMinutes,
-      );
-    }
-
-    for (var prayerIndex = 0; prayerIndex < 7; prayerIndex++) {
+    for (var index = 0; index < 7; index++) {
       await schedulePrayerReminder(
-        prayerIndex: prayerIndex,
-        prayerTime: prayerTimes[prayerIndex],
+        prayerIndex: index,
+        prayerTime: prayerTimes[index],
         reminderMinutes: reminderMinutes,
         sound: sound,
         vibration: vibration,
@@ -608,79 +730,27 @@ class NotificationService {
   }
 
   // ---------------------------------------------------------------------------
-  // SCHEDULE DAILY REMINDER
+  // ZONED SCHEDULING
+  // ---------------------------------------------------------------------------
+  //
+  // IMPORTANT:
+  // flutter_local_notifications 17.2.3 supports androidScheduleMode.
+  // androidAllowWhileIdle is deprecated and is intentionally NOT used.
+  //
+  // uiLocalNotificationDateInterpretation remains required for this
+  // plugin version.
   // ---------------------------------------------------------------------------
 
-  static Future<bool> scheduleDailyReminder({
-    required int id,
-    required DateTime time,
-    required String title,
-    required String body,
-    bool sound = true,
-    bool vibration = true,
-    String? payload,
-  }) async {
-    await initialize();
-
-    if (!await refreshNotificationPermissionStatus()) {
-      return false;
-    }
-
-    var scheduledDate = tz.TZDateTime.from(time, tz.local);
-
-    final now = tz.TZDateTime.now(tz.local);
-
-    if (!scheduledDate.isAfter(now)) {
-      scheduledDate = tz.TZDateTime(
-        tz.local,
-        now.year,
-        now.month,
-        now.day + 1,
-        scheduledDate.hour,
-        scheduledDate.minute,
-        scheduledDate.second,
-      );
-    }
-
-    try {
-      final details = _notificationDetails(sound: sound, vibration: vibration);
-
-      final mode = await _getScheduleMode();
-
-      await _zonedScheduleWithFallback(
-        id: id,
-        title: title,
-        body: body,
-        scheduledDate: scheduledDate,
-        details: details,
-        payload: payload,
-        scheduleMode: mode,
-      );
-
-      return true;
-    } catch (error, stackTrace) {
-      _lastError = error.toString();
-
-      debugPrint('Daily reminder scheduling failed: $error');
-      debugPrintStack(stackTrace: stackTrace);
-
-      return false;
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // ZONED SCHEDULE
-  // ---------------------------------------------------------------------------
-
-  static Future<void> _zonedScheduleWithFallback({
+  static Future<void> _scheduleZoned({
     required int id,
     required String title,
     required String body,
     required tz.TZDateTime scheduledDate,
     required NotificationDetails details,
-    required AndroidScheduleMode scheduleMode,
     String? payload,
   }) async {
+    final scheduleMode = await _getScheduleMode();
+
     try {
       await _plugin.zonedSchedule(
         id,
@@ -688,41 +758,66 @@ class NotificationService {
         body,
         scheduledDate,
         details,
+
+        // ✅ New API.
+        // Replaces deprecated androidAllowWhileIdle.
         androidScheduleMode: scheduleMode,
+
+        // ✅ Required by flutter_local_notifications 17.2.3.
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+
         payload: payload,
 
-        // Prayer reminders repeat every day at this time.
+        // Repeat every day at the same time.
         matchDateTimeComponents: DateTimeComponents.time,
       );
+
+      debugPrint(
+        'Zoned notification scheduled successfully: '
+        'id=$id mode=$scheduleMode',
+      );
     } catch (error) {
-      debugPrint('Primary notification schedule failed: $error');
+      debugPrint(
+        'Primary notification scheduling failed: '
+        '$error',
+      );
 
-      // If exact scheduling fails, always try inexact scheduling.
-      if (scheduleMode != AndroidScheduleMode.inexactAllowWhileIdle) {
-        debugPrint('Retrying notification using inexact scheduling...');
-
+      // Fallback to inexact scheduling.
+      try {
         await _plugin.zonedSchedule(
           id,
           title,
           body,
           scheduledDate,
           details,
+
+          // ✅ New API.
           androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+
+          // ✅ Still required in version 17.2.3.
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+
           payload: payload,
+
           matchDateTimeComponents: DateTimeComponents.time,
         );
 
-        debugPrint('Inexact notification scheduling succeeded.');
+        debugPrint('Fallback notification scheduling succeeded.');
+      } catch (fallbackError) {
+        debugPrint(
+          'Fallback notification scheduling failed: '
+          '$fallbackError',
+        );
 
-        return;
+        rethrow;
       }
-
-      rethrow;
     }
   }
 
   // ---------------------------------------------------------------------------
-  // DETAILS
+  // NOTIFICATION DETAILS
   // ---------------------------------------------------------------------------
 
   static NotificationDetails _notificationDetails({
@@ -731,35 +826,42 @@ class NotificationService {
   }) {
     final channelId = _channelId(sound: sound, vibration: vibration);
 
-    final AndroidNotificationDetails androidDetails =
-        AndroidNotificationDetails(
-          channelId,
-          _channelName(channelId),
-          channelDescription: 'Ethiopian Orthodox prayer reminders.',
-          importance: Importance.max,
-          priority: Priority.high,
-          icon: _androidIconName,
-          playSound: sound && _customSoundAvailable,
-          sound: sound && _customSoundAvailable
-              ? const RawResourceAndroidNotificationSound(_androidRawSoundName)
-              : null,
-          enableVibration: vibration,
-          category: AndroidNotificationCategory.reminder,
-          visibility: NotificationVisibility.public,
-          autoCancel: true,
-          ongoing: false,
-          showWhen: true,
-        );
+    final androidDetails = AndroidNotificationDetails(
+      channelId,
+      _channelName(channelId),
 
-    return NotificationDetails(
-      android: androidDetails,
-      iOS: DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: sound,
-        sound: sound ? _iosSoundName : null,
-      ),
+      channelDescription: 'Ethiopian Orthodox prayer reminders.',
+
+      importance: Importance.max,
+      priority: Priority.high,
+
+      icon: _androidIconName,
+
+      playSound: sound && _customSoundAvailable,
+
+      sound: sound && _customSoundAvailable
+          ? const RawResourceAndroidNotificationSound(_androidRawSoundName)
+          : null,
+
+      enableVibration: vibration,
+
+      category: AndroidNotificationCategory.reminder,
+
+      visibility: NotificationVisibility.public,
+
+      autoCancel: true,
+      ongoing: false,
+      showWhen: true,
     );
+
+    final iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: sound,
+      sound: sound ? _iosSoundName : null,
+    );
+
+    return NotificationDetails(android: androidDetails, iOS: iosDetails);
   }
 
   static String _channelId({required bool sound, required bool vibration}) {
@@ -798,7 +900,7 @@ class NotificationService {
   }
 
   // ---------------------------------------------------------------------------
-  // NOTIFICATION IDs
+  // NOTIFICATION IDS
   // ---------------------------------------------------------------------------
 
   static int notificationId(int prayerIndex, int reminderMinutes) {
@@ -809,18 +911,20 @@ class NotificationService {
   // CANCEL
   // ---------------------------------------------------------------------------
 
+  static Future<void> cancel(int id) async {
+    await initialize();
+
+    await _plugin.cancel(id);
+  }
+
   static Future<void> cancelPrayerReminder({
     required int prayerIndex,
     required int reminderMinutes,
   }) async {
-    await initialize();
-
-    await _plugin.cancel(notificationId(prayerIndex, reminderMinutes));
+    await cancel(notificationId(prayerIndex, reminderMinutes));
   }
 
   static Future<void> cancelPrayer({required int prayerIndex}) async {
-    await initialize();
-
     for (final minutes in [0, 5, 10, 15]) {
       await cancelPrayerReminder(
         prayerIndex: prayerIndex,
@@ -829,46 +933,57 @@ class NotificationService {
     }
   }
 
-  static Future<void> cancelAllPrayerReminders() async {
+  static Future<void> cancelAllPrayerReminders([Iterable<int>? ids]) async {
     await initialize();
+
+    if (ids != null) {
+      for (final id in ids) {
+        await _plugin.cancel(id);
+      }
+
+      return;
+    }
 
     for (var prayerIndex = 0; prayerIndex < 7; prayerIndex++) {
       for (final minutes in [0, 5, 10, 15]) {
-        await cancelPrayerReminder(
-          prayerIndex: prayerIndex,
-          reminderMinutes: minutes,
-        );
+        await _plugin.cancel(notificationId(prayerIndex, minutes));
       }
     }
   }
 
   static Future<void> cancelAll() async {
     await initialize();
+
     await _plugin.cancelAll();
   }
 
   // ---------------------------------------------------------------------------
-  // TITLES / BODY
+  // LANGUAGE
   // ---------------------------------------------------------------------------
 
-  static String _defaultTitle(int prayerIndex) {
-    if (prayerIndex < 0 || prayerIndex >= _prayerNames.length) {
-      return 'ለጸሎት ተነሱ';
+  static String _selectLanguageText(
+    String? value,
+    String language, {
+    required String fallbackAmharic,
+    required String fallbackEnglish,
+  }) {
+    if (value == null || value.trim().isEmpty) {
+      return language == 'eth' ? fallbackAmharic : fallbackEnglish;
     }
 
-    return '${_prayerNames[prayerIndex]} • የጸሎት ጊዜ';
-  }
+    final parts = value.split('|');
 
-  static String _defaultBody(int prayerIndex, int reminderMinutes) {
-    if (reminderMinutes == 0) {
-      return 'የጸሎት ጊዜ ደርሷል።';
+    if (parts.length >= 2) {
+      return language == 'eth'
+          ? parts.first.trim()
+          : parts.sublist(1).join('|').trim();
     }
 
-    return 'የጸሎት ጊዜ ከ$reminderMinutes ደቂቃ በኋላ ነው።';
+    return value;
   }
 
   // ---------------------------------------------------------------------------
-  // TAP HANDLING
+  // NOTIFICATION TAP
   // ---------------------------------------------------------------------------
 
   static void _onNotificationResponse(NotificationResponse response) {
@@ -877,9 +992,10 @@ class NotificationService {
 
   @pragma('vm:entry-point')
   static void notificationTapBackground(NotificationResponse response) {
-    // Do not attempt navigation from a background isolate.
-    // The launch handler will handle opening the prayer screen.
-    debugPrint('Notification tapped in background: ${response.payload}');
+    debugPrint(
+      'Notification tapped in background: '
+      '${response.payload}',
+    );
   }
 
   static void _handleNotificationPayload(String? payload) {
@@ -900,12 +1016,15 @@ class NotificationService {
         }
       }
     } catch (error) {
-      debugPrint('Could not parse notification payload: $error');
+      debugPrint(
+        'Could not parse notification payload: '
+        '$error',
+      );
     }
   }
 
   // ---------------------------------------------------------------------------
-  // LAUNCH FROM NOTIFICATION
+  // APP LAUNCHED BY NOTIFICATION
   // ---------------------------------------------------------------------------
 
   static Future<void> checkLaunchNotification() async {
@@ -928,29 +1047,30 @@ class NotificationService {
         return;
       }
 
-      try {
-        final decoded = jsonDecode(payload);
+      final decoded = jsonDecode(payload);
 
-        if (decoded is Map<String, dynamic>) {
-          final value = decoded['prayerId'];
+      if (decoded is Map<String, dynamic>) {
+        final value = decoded['prayerId'];
 
-          if (value is int) {
-            _launchPrayerIndex = value;
-          } else if (value is num) {
-            _launchPrayerIndex = value.toInt();
-          }
+        if (value is int) {
+          _launchPrayerIndex = value;
+        } else if (value is num) {
+          _launchPrayerIndex = value.toInt();
         }
-      } catch (error) {
-        debugPrint('Launch notification payload error: $error');
       }
     } catch (error) {
-      debugPrint('Could not check launch notification: $error');
+      debugPrint(
+        'Could not check launch notification: '
+        '$error',
+      );
     }
   }
 
   static int? consumeLaunchPrayerIndex() {
     final value = _launchPrayerIndex;
+
     _launchPrayerIndex = null;
+
     return value;
   }
 
@@ -959,9 +1079,7 @@ class NotificationService {
   // ---------------------------------------------------------------------------
 
   static Future<void> openNotificationSettings() async {
-    if (kIsWeb) {
-      return;
-    }
+    if (kIsWeb) return;
 
     final intent = AndroidIntent(
       action: 'android.settings.APP_NOTIFICATION_SETTINGS',
@@ -974,9 +1092,7 @@ class NotificationService {
   }
 
   static Future<void> openExactAlarmSettings() async {
-    if (kIsWeb) {
-      return;
-    }
+    if (kIsWeb) return;
 
     final intent = AndroidIntent(
       action: 'android.settings.REQUEST_SCHEDULE_EXACT_ALARM',

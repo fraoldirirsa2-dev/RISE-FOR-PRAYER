@@ -29,6 +29,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/sounds/a.mp3
+    - assets/data/daily_prayer.json
     - assets/images/
     - assets/bible/
   fonts:
