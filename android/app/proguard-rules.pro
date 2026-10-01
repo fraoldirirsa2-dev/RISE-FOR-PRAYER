@@ -13,5 +13,6 @@
 
 # Keep annotations and enum metadata used by Android/plugin code.
 -keepattributes *Annotation*
+-keepattributes Signature
 -keepattributes InnerClasses
 -keepattributes EnclosingMethod
