@@ -6,6 +6,39 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
+@visibleForTesting
+tz.TZDateTime nextPrayerReminderDate({
+  required tz.Location location,
+  required tz.TZDateTime now,
+  required int hour,
+  required int minute,
+  required int offsetMinutes,
+}) {
+  final prayerToday = tz.TZDateTime(
+    location,
+    now.year,
+    now.month,
+    now.day,
+    hour,
+    minute,
+  );
+  var reminderDate = prayerToday.subtract(Duration(minutes: offsetMinutes));
+
+  if (!reminderDate.isAfter(now)) {
+    final prayerTomorrow = tz.TZDateTime(
+      location,
+      now.year,
+      now.month,
+      now.day + 1,
+      hour,
+      minute,
+    );
+    reminderDate = prayerTomorrow.subtract(Duration(minutes: offsetMinutes));
+  }
+
+  return reminderDate;
+}
+
 class NotificationService {
   NotificationService._();
 
@@ -573,33 +606,13 @@ class NotificationService {
     }
 
     try {
-      final now = tz.TZDateTime.now(tz.local);
-
-      var scheduledDate = tz.TZDateTime(
-        tz.local,
-        now.year,
-        now.month,
-        now.day,
-        hour,
-        minute,
+      final scheduledDate = nextPrayerReminderDate(
+        location: tz.local,
+        now: tz.TZDateTime.now(tz.local),
+        hour: hour,
+        minute: minute,
+        offsetMinutes: reminderOffset.inMinutes,
       );
-
-      // Apply reminder offset.
-      scheduledDate = scheduledDate.subtract(reminderOffset);
-
-      // If today's reminder time has already passed,
-      // schedule the next occurrence tomorrow.
-      if (!scheduledDate.isAfter(now)) {
-        scheduledDate = tz.TZDateTime(
-          tz.local,
-          now.year,
-          now.month,
-          now.day + 1,
-          scheduledDate.hour,
-          scheduledDate.minute,
-          0,
-        );
-      }
 
       final parsedTitle = _selectLanguageText(
         title,

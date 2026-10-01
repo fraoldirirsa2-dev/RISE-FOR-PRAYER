@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rise_for_prayer/data/prayer_reminders.dart';
 import 'package:rise_for_prayer/services/notification_service.dart';
+import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:timezone/timezone.dart' as tz;
 
 void main() {
   test('defines seven stable daily reminders from prayer data', () {
@@ -46,4 +48,82 @@ void main() {
     );
     expect(NotificationService.androidNotificationIconName, 'ic_notification');
   });
+
+  test('calculates each reminder offset before a morning prayer', () {
+    tz_data.initializeTimeZones();
+    final location = tz.getLocation('Africa/Addis_Ababa');
+    final now = tz.TZDateTime(location, 2026, 10, 1, 5, 0);
+    final expected = {
+      15: tz.TZDateTime(location, 2026, 10, 1, 5, 45),
+      10: tz.TZDateTime(location, 2026, 10, 1, 5, 50),
+      5: tz.TZDateTime(location, 2026, 10, 1, 5, 55),
+      0: tz.TZDateTime(location, 2026, 10, 1, 6, 0),
+    };
+
+    for (final entry in expected.entries) {
+      expect(
+        nextPrayerReminderDate(
+          location: location,
+          now: now,
+          hour: 6,
+          minute: 0,
+          offsetMinutes: entry.key,
+        ),
+        entry.value,
+      );
+    }
+  });
+
+  test('keeps offsets before a midnight prayer on the previous evening', () {
+    tz_data.initializeTimeZones();
+    final location = tz.getLocation('Africa/Addis_Ababa');
+    final now = tz.TZDateTime(location, 2026, 10, 1, 23, 30);
+    final expected = {
+      15: tz.TZDateTime(location, 2026, 10, 1, 23, 45),
+      10: tz.TZDateTime(location, 2026, 10, 1, 23, 50),
+      5: tz.TZDateTime(location, 2026, 10, 1, 23, 55),
+      0: tz.TZDateTime(location, 2026, 10, 2, 0, 0),
+    };
+
+    for (final entry in expected.entries) {
+      expect(
+        nextPrayerReminderDate(
+          location: location,
+          now: now,
+          hour: 0,
+          minute: 0,
+          offsetMinutes: entry.key,
+        ),
+        entry.value,
+      );
+    }
+  });
+
+  test(
+    'moves a passed reminder to the next day without skipping valid ones',
+    () {
+      tz_data.initializeTimeZones();
+      final location = tz.getLocation('Africa/Addis_Ababa');
+      final now = tz.TZDateTime(location, 2026, 10, 1, 5, 52);
+      final expected = {
+        15: tz.TZDateTime(location, 2026, 10, 2, 5, 45),
+        10: tz.TZDateTime(location, 2026, 10, 2, 5, 50),
+        5: tz.TZDateTime(location, 2026, 10, 1, 5, 55),
+        0: tz.TZDateTime(location, 2026, 10, 1, 6, 0),
+      };
+
+      for (final entry in expected.entries) {
+        expect(
+          nextPrayerReminderDate(
+            location: location,
+            now: now,
+            hour: 6,
+            minute: 0,
+            offsetMinutes: entry.key,
+          ),
+          entry.value,
+        );
+      }
+    },
+  );
 }
