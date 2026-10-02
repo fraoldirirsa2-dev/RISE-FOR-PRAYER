@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rise_for_prayer/data/prayer_reminders.dart';
+import 'package:rise_for_prayer/providers/settings_provider.dart';
 import 'package:rise_for_prayer/services/notification_service.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
@@ -29,6 +30,42 @@ void main() {
       isTrue,
     );
   });
+
+  test(
+    'has explicit reminder offsets with backwards-compatible minute values',
+    () {
+      expect(PrayerReminderOffset.atPrayerTime.duration, Duration.zero);
+      expect(
+        PrayerReminderOffset.fiveMinutes.duration,
+        const Duration(minutes: 5),
+      );
+      expect(
+        PrayerReminderOffset.tenMinutes.duration,
+        const Duration(minutes: 10),
+      );
+      expect(
+        PrayerReminderOffset.fifteenMinutes.duration,
+        const Duration(minutes: 15),
+      );
+
+      expect(
+        PrayerReminderOffset.fromMinutes(0),
+        PrayerReminderOffset.atPrayerTime,
+      );
+      expect(
+        PrayerReminderOffset.fromMinutes(5),
+        PrayerReminderOffset.fiveMinutes,
+      );
+      expect(
+        PrayerReminderOffset.fromMinutes(10),
+        PrayerReminderOffset.tenMinutes,
+      );
+      expect(
+        PrayerReminderOffset.fromMinutes(15),
+        PrayerReminderOffset.fifteenMinutes,
+      );
+    },
+  );
 
   test('uses an existing Android notification icon resource', () {
     final iconFile = File(
@@ -126,4 +163,15 @@ void main() {
       }
     },
   );
+
+  test('keeps one stable notification id per prayer hour across offsets', () {
+    expect(NotificationService.notificationId(0), prayerReminders[0].id);
+    expect(NotificationService.notificationId(0, 0), prayerReminders[0].id);
+    expect(NotificationService.notificationId(0, 5), prayerReminders[0].id);
+    expect(NotificationService.notificationId(0, 10), prayerReminders[0].id);
+    expect(NotificationService.notificationId(0, 15), prayerReminders[0].id);
+
+    expect(NotificationService.notificationId(6), prayerReminders[6].id);
+    expect(NotificationService.notificationId(6, 15), prayerReminders[6].id);
+  });
 }

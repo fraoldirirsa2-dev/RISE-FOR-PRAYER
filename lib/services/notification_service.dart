@@ -2,26 +2,45 @@ import 'dart:convert';
 
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:rise_for_prayer/data/prayer_reminders.dart';
+import 'package:rise_for_prayer/models/prayer_reminder_offset.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
+/// Calculates the next valid daily reminder occurrence for a prayer time.
+///
+/// The function is intentionally pure: it decides when a reminder should occur,
+/// but it does not schedule, cancel, save, or persist notifications.
+///
+/// The notification time is computed as:
+/// prayerTime - offsetMinutes.
+/// If that reminder time is not in the future, the next valid occurrence is
+/// moved forward by one day while preserving the correct timezone and date
+/// relationship.
 @visibleForTesting
 tz.TZDateTime nextPrayerReminderDate({
   required tz.Location location,
   required tz.TZDateTime now,
-  required int hour,
-  required int minute,
+  int? prayerHour,
+  int? prayerMinute,
+  int? hour,
+  int? minute,
   required int offsetMinutes,
 }) {
+  final resolvedHour = prayerHour ?? hour ?? 0;
+  final resolvedMinute = prayerMinute ?? minute ?? 0;
+
   final prayerToday = tz.TZDateTime(
     location,
     now.year,
     now.month,
     now.day,
-    hour,
-    minute,
+    resolvedHour,
+    resolvedMinute,
   );
+
   var reminderDate = prayerToday.subtract(Duration(minutes: offsetMinutes));
 
   if (!reminderDate.isAfter(now)) {
@@ -30,8 +49,8 @@ tz.TZDateTime nextPrayerReminderDate({
       now.year,
       now.month,
       now.day + 1,
-      hour,
-      minute,
+      resolvedHour,
+      resolvedMinute,
     );
     reminderDate = prayerTomorrow.subtract(Duration(minutes: offsetMinutes));
   }
@@ -163,6 +182,14 @@ class NotificationService {
       await refreshNotificationPermissionStatus();
 
       debugPrint('NotificationService initialized successfully.');
+    } on MissingPluginException {
+      _notificationsEnabled = false;
+      _lastError = 'Notification plugin is unavailable in this environment.';
+
+      debugPrint(
+        'NotificationService initialization skipped because the local notification plugin is unavailable.',
+      );
+      return;
     } catch (error, stackTrace) {
       _lastError = error.toString();
 
@@ -220,6 +247,10 @@ class NotificationService {
 
       _notificationsEnabled = true;
       return true;
+    } on MissingPluginException {
+      _notificationsEnabled = false;
+      _lastError = 'Notification plugin is unavailable in this environment.';
+      return false;
     } catch (error) {
       debugPrint('Could not read notification permission: $error');
 
@@ -298,6 +329,10 @@ class NotificationService {
       _notificationsEnabled = true;
 
       return true;
+    } on MissingPluginException {
+      _notificationsEnabled = false;
+      _lastError = 'Notification plugin is unavailable in this environment.';
+      return false;
     } catch (error, stackTrace) {
       _lastError = error.toString();
 
@@ -334,6 +369,8 @@ class NotificationService {
       final result = await android.canScheduleExactNotifications();
 
       return result ?? false;
+    } on MissingPluginException {
+      return false;
     } catch (error) {
       debugPrint('Exact alarm check failed: $error');
 
@@ -368,6 +405,8 @@ class NotificationService {
       );
 
       return after ?? result ?? false;
+    } on MissingPluginException {
+      return false;
     } catch (error) {
       debugPrint('Exact alarm permission request failed: $error');
 
@@ -562,6 +601,81 @@ class NotificationService {
   }
 
   // ---------------------------------------------------------------------------
+  // REMINDER BODY
+  // ---------------------------------------------------------------------------
+
+  static String prayerReminderBody({
+    required String language,
+    required String amharicTitle,
+    required String englishTitle,
+    required PrayerReminderOffset offset,
+  }) {
+    final minutes = offset.minutes;
+
+    if (offset == PrayerReminderOffset.atPrayerTime) {
+      return language == 'eth'
+          ? 'የ$amharicTitle ሰዓት አሁን ደርሷል።|Prayer time for $englishTitle is now.'
+          : 'Prayer time for $englishTitle is now.|የ$amharicTitle ሰዓት አሁን ደርሷል።';
+    }
+
+    final amharicText = 'የ$amharicTitle ሰዓት በ$minutes ደቂቃ ውስጥ ነው።';
+    final englishText = 'Prayer time for $englishTitle is in $minutes minutes.';
+
+    return language == 'eth'
+        ? '$amharicText|$englishText'
+        : '$englishText|$amharicText';
+  }
+
+  static String previewReminderTime({
+    required String prayerHour,
+    required PrayerReminderOffset offset,
+    String language = 'en',
+  }) {
+    final parts = prayerHour.trim().split(' ');
+    if (parts.length < 2) {
+      return prayerHour;
+    }
+
+    final clockPart = parts.first;
+    final meridiem = parts.last.toUpperCase();
+    final clock = clockPart.split(':');
+
+    if (clock.length < 2) {
+      return prayerHour;
+    }
+
+    int hour = int.tryParse(clock[0]) ?? 0;
+    final minute = int.tryParse(clock[1]) ?? 0;
+
+    if (meridiem == 'PM' && hour != 12) {
+      hour += 12;
+    }
+    if (meridiem == 'AM' && hour == 12) {
+      hour = 0;
+    }
+
+    final now = tz.TZDateTime.now(tz.local);
+    final reminderDate = tz.TZDateTime(
+      tz.local,
+      now.year,
+      now.month,
+      now.day,
+      hour,
+      minute,
+    ).subtract(offset.duration);
+
+    if (language == 'eth') {
+      return '${reminderDate.hour.toString().padLeft(2, '0')}:${reminderDate.minute.toString().padLeft(2, '0')}';
+    }
+
+    final displayHour = reminderDate.hour % 12 == 0
+        ? 12
+        : reminderDate.hour % 12;
+    final suffix = reminderDate.hour >= 12 ? 'PM' : 'AM';
+    return '$displayHour:${reminderDate.minute.toString().padLeft(2, '0')} $suffix';
+  }
+
+  // ---------------------------------------------------------------------------
   // DAILY REMINDER
   // ---------------------------------------------------------------------------
 
@@ -633,6 +747,8 @@ class NotificationService {
         'reminderMinutes': reminderOffset.inMinutes,
       });
 
+      await cancel(id);
+
       await _scheduleZoned(
         id: id,
         title: parsedTitle,
@@ -691,7 +807,7 @@ class NotificationService {
     }
 
     return scheduleDailyReminder(
-      id: notificationId(prayerIndex, reminderMinutes),
+      id: notificationId(prayerIndex),
       title: title ?? '${_prayerNames[prayerIndex]} • የጸሎት ጊዜ',
       body:
           body ??
@@ -916,8 +1032,22 @@ class NotificationService {
   // NOTIFICATION IDS
   // ---------------------------------------------------------------------------
 
-  static int notificationId(int prayerIndex, int reminderMinutes) {
+  static int legacyNotificationId(int prayerIndex, int reminderMinutes) {
     return 1000 + prayerIndex * 100 + reminderMinutes;
+  }
+
+  static int notificationId(int prayerIndex, [int? reminderMinutes]) {
+    if (prayerIndex < 0 || prayerIndex >= prayerReminders.length) {
+      return 1000 + prayerIndex;
+    }
+
+    final stableId = prayerReminders[prayerIndex].id;
+
+    if (reminderMinutes == null) {
+      return stableId;
+    }
+
+    return stableId;
   }
 
   // ---------------------------------------------------------------------------
@@ -934,15 +1064,25 @@ class NotificationService {
     required int prayerIndex,
     required int reminderMinutes,
   }) async {
-    await cancel(notificationId(prayerIndex, reminderMinutes));
+    final ids = <int>{
+      notificationId(prayerIndex),
+      legacyNotificationId(prayerIndex, reminderMinutes),
+    };
+
+    for (final id in ids) {
+      await cancel(id);
+    }
   }
 
   static Future<void> cancelPrayer({required int prayerIndex}) async {
-    for (final minutes in [0, 5, 10, 15]) {
-      await cancelPrayerReminder(
-        prayerIndex: prayerIndex,
-        reminderMinutes: minutes,
-      );
+    final ids = <int>{
+      notificationId(prayerIndex),
+      for (final minutes in [0, 5, 10, 15])
+        legacyNotificationId(prayerIndex, minutes),
+    };
+
+    for (final id in ids) {
+      await cancel(id);
     }
   }
 
@@ -958,9 +1098,7 @@ class NotificationService {
     }
 
     for (var prayerIndex = 0; prayerIndex < 7; prayerIndex++) {
-      for (final minutes in [0, 5, 10, 15]) {
-        await _plugin.cancel(notificationId(prayerIndex, minutes));
-      }
+      await cancelPrayer(prayerIndex: prayerIndex);
     }
   }
 

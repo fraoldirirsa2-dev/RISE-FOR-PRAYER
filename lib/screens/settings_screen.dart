@@ -5,6 +5,7 @@ import 'package:rise_for_prayer/data/prayer_data.dart';
 import 'package:rise_for_prayer/data/prayer_reminders.dart';
 import 'package:rise_for_prayer/providers/app_providers.dart';
 import 'package:rise_for_prayer/providers/settings_provider.dart';
+import 'package:rise_for_prayer/services/notification_service.dart';
 import 'package:rise_for_prayer/utils/localization.dart';
 import 'package:rise_for_prayer/widgets/eth_cross.dart';
 
@@ -520,9 +521,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 8),
-              DropdownButtonFormField<int>(
-                key: ValueKey(settings.reminderOffsetMinutes),
-                initialValue: settings.reminderOffsetMinutes,
+              DropdownButtonFormField<PrayerReminderOffset>(
+                key: ValueKey(settings.globalReminderOffset),
+                initialValue: settings.globalReminderOffset,
                 isExpanded: true,
                 decoration: const InputDecoration(
                   contentPadding: EdgeInsets.symmetric(
@@ -530,53 +531,46 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     vertical: 12,
                   ),
                 ),
-                onChanged: (minutes) {
-                  if (minutes != null) {
-                    settings.setReminderOffsetMinutes(minutes);
+                onChanged: (offset) {
+                  if (offset != null) {
+                    settings.setGlobalReminderOffset(offset);
                   }
                 },
-                items: [
-                  DropdownMenuItem(
-                    value: 0,
-                    child: Text(
-                      localizedText(
-                        settings.language,
-                        'በጸሎት ሰዓት',
-                        'At prayer time',
+                items: PrayerReminderOffset.values
+                    .map(
+                      (offset) => DropdownMenuItem(
+                        value: offset,
+                        child: Text(offset.label(settings.language)),
                       ),
+                    )
+                    .toList(),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${localizedText(settings.language, 'የጸሎት ሰዓት', 'Prayer time')}: ${hours.first.time}',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
-                  ),
-                  DropdownMenuItem(
-                    value: 5,
-                    child: Text(
-                      localizedText(
-                        settings.language,
-                        'ከ5 ደቂቃ በፊት',
-                        '5 minutes before',
-                      ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${localizedText(settings.language, 'ማስታወሻ', 'Reminder')}: ${settings.globalReminderOffset.label(settings.language)}',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
-                  ),
-                  DropdownMenuItem(
-                    value: 10,
-                    child: Text(
-                      localizedText(
-                        settings.language,
-                        'ከ10 ደቂቃ በፊት',
-                        '10 minutes before',
-                      ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${localizedText(settings.language, 'የሚመጣበት ሰዓት', 'Notification time')}: ${NotificationService.previewReminderTime(prayerHour: hours.first.time, offset: settings.globalReminderOffset, language: settings.language)}',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
-                  ),
-                  DropdownMenuItem(
-                    value: 15,
-                    child: Text(
-                      localizedText(
-                        settings.language,
-                        'ከ15 ደቂቃ በፊት',
-                        '15 minutes before',
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -614,6 +608,44 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ? (_) => settings.toggleReminder(index)
                 : null,
           ),
+          const SizedBox(height: 4),
+          DropdownButtonFormField<PrayerReminderOffset?>(
+            initialValue: settings.prayerReminderOverrides[index],
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: localizedText(
+                settings.language,
+                'የማሳሰቢያ ጊዜ',
+                'Reminder',
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 12,
+              ),
+            ),
+            items: [
+              DropdownMenuItem<PrayerReminderOffset?>(
+                value: null,
+                child: Text(
+                  localizedText(
+                    settings.language,
+                    'እንደ ነባሪ ተጠቀም',
+                    'Use default',
+                  ),
+                ),
+              ),
+              ...PrayerReminderOffset.values.map(
+                (offset) => DropdownMenuItem<PrayerReminderOffset?>(
+                  value: offset,
+                  child: Text(offset.label(settings.language)),
+                ),
+              ),
+            ],
+            onChanged: (offset) {
+              settings.setPrayerReminderOffset(index, offset);
+            },
+          ),
+          const SizedBox(height: 8),
         ],
       ],
     );

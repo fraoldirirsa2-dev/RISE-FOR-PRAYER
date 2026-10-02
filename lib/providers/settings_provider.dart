@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:rise_for_prayer/data/prayer_reminders.dart';
+import 'package:rise_for_prayer/models/prayer_reminder_offset.dart';
 import 'package:rise_for_prayer/services/notification_service.dart';
 import 'package:rise_for_prayer/services/preferences_store.dart';
+
+export 'package:rise_for_prayer/models/prayer_reminder_offset.dart';
 
 enum ThemeModeType { light, dark }
 
@@ -20,7 +23,11 @@ class SettingsProvider extends ChangeNotifier {
 
   bool _remindersEnabled = false;
 
-  int _reminderOffsetMinutes = 0;
+  PrayerReminderOffset _globalReminderOffset =
+      PrayerReminderOffset.atPrayerTime;
+
+  final List<PrayerReminderOffset?> _prayerReminderOverrides =
+      List<PrayerReminderOffset?>.filled(7, null);
 
   int _scheduledReminderCount = 0;
 
@@ -52,7 +59,12 @@ class SettingsProvider extends ChangeNotifier {
 
   bool get remindersEnabled => _remindersEnabled;
 
-  int get reminderOffsetMinutes => _reminderOffsetMinutes;
+  PrayerReminderOffset get globalReminderOffset => _globalReminderOffset;
+
+  int get reminderOffsetMinutes => _globalReminderOffset.minutes;
+
+  List<PrayerReminderOffset?> get prayerReminderOverrides =>
+      List<PrayerReminderOffset?>.unmodifiable(_prayerReminderOverrides);
 
   int get scheduledReminderCount => _scheduledReminderCount;
 
@@ -234,20 +246,57 @@ class SettingsProvider extends ChangeNotifier {
   // REMINDER OFFSET
   // ===========================================================================
 
-  Future<void> setReminderOffsetMinutes(int minutes) async {
-    const allowedOffsets = <int>{0, 5, 10, 15};
+  PrayerReminderOffset effectiveReminderOffsetFor(int index) {
+    if (index < 0 || index >= _prayerReminderOverrides.length) {
+      return _globalReminderOffset;
+    }
 
-    if (!allowedOffsets.contains(minutes)) {
+    return _prayerReminderOverrides[index] ?? _globalReminderOffset;
+  }
+
+  bool hasPrayerOverride(int index) {
+    if (index < 0 || index >= _prayerReminderOverrides.length) {
+      return false;
+    }
+
+    return _prayerReminderOverrides[index] != null;
+  }
+
+  Future<void> setGlobalReminderOffset(PrayerReminderOffset offset) async {
+    if (_globalReminderOffset == offset) {
       return;
     }
 
-    _reminderOffsetMinutes = minutes;
+    _globalReminderOffset = offset;
 
     await _saveSettings();
 
     await reconcilePrayerReminders();
 
     notifyListeners();
+  }
+
+  Future<void> setPrayerReminderOffset(
+    int index,
+    PrayerReminderOffset? offset,
+  ) async {
+    if (index < 0 || index >= _prayerReminderOverrides.length) {
+      return;
+    }
+
+    _prayerReminderOverrides[index] = offset;
+
+    await _saveSettings();
+
+    await reconcilePrayerReminders();
+
+    notifyListeners();
+  }
+
+  Future<void> setReminderOffsetMinutes(int minutes) async {
+    final offset = PrayerReminderOffset.fromMinutes(minutes);
+
+    await setGlobalReminderOffset(offset);
   }
 
   // ===========================================================================
@@ -357,27 +406,40 @@ class SettingsProvider extends ChangeNotifier {
     }
 
     final reminder = prayerReminders[index];
-
-    final id = reminder.id;
+    final id = NotificationService.notificationId(index);
 
     // Disabled master toggle or individual prayer.
     if (!_remindersEnabled || !_reminderEnabled[index]) {
-      await NotificationService.cancel(id);
+      await NotificationService.cancelPrayer(prayerIndex: index);
 
       return false;
     }
 
     try {
+      final effectiveOffset = effectiveReminderOffsetFor(index);
+      final reminderBody = NotificationService.prayerReminderBody(
+        language: _language,
+        amharicTitle: reminder.amharicTitle,
+        englishTitle: reminder.englishTitle,
+        offset: effectiveOffset,
+      );
+
+      for (final legacyId in [0, 5, 10, 15].map(
+        (offsetMinutes) =>
+            NotificationService.legacyNotificationId(index, offsetMinutes),
+      )) {
+        await NotificationService.cancel(legacyId);
+      }
+
       final scheduled = await NotificationService.scheduleDailyReminder(
         id: id,
         title: '${reminder.amharicTitle} ሰዓት|${reminder.englishTitle} Prayer',
-        body:
-            'የ${reminder.amharicTitle} ሰዓት ጸሎት ጊዜ ነው።|Time for ${reminder.englishTitle} prayer. Rise for prayer!',
+        body: reminderBody,
         hour: reminder.hour,
         minute: reminder.minute,
         vibrationEnabled: _vibrationEnabled,
         soundEnabled: _notificationSoundEnabled,
-        reminderOffset: Duration(minutes: _reminderOffsetMinutes),
+        reminderOffset: effectiveOffset.duration,
         language: _language,
         prayerIndex: index,
       );
@@ -471,7 +533,25 @@ class SettingsProvider extends ChangeNotifier {
 
       await prefs.setBool('remindersEnabled', _remindersEnabled);
 
-      await prefs.setInt('reminderOffsetMinutes', _reminderOffsetMinutes);
+      await prefs.setInt(
+        'globalReminderOffsetMinutes',
+        _globalReminderOffset.minutes,
+      );
+
+      await prefs.setInt(
+        'reminderOffsetMinutes',
+        _globalReminderOffset.minutes,
+      );
+
+      await prefs.setStringList(
+        'prayerReminderOverrides',
+        _prayerReminderOverrides
+            .map(
+              (offset) =>
+                  offset == null ? 'default' : offset.minutes.toString(),
+            )
+            .toList(),
+      );
 
       await prefs.setBool('onboardingComplete', _onboardingComplete);
 
@@ -509,7 +589,27 @@ class SettingsProvider extends ChangeNotifier {
 
       _remindersEnabled = prefs.getBool('remindersEnabled') ?? false;
 
-      _reminderOffsetMinutes = prefs.getInt('reminderOffsetMinutes') ?? 0;
+      final savedGlobalMinutes =
+          prefs.getInt('globalReminderOffsetMinutes') ??
+          prefs.getInt('reminderOffsetMinutes') ??
+          0;
+      _globalReminderOffset = PrayerReminderOffset.fromMinutes(
+        savedGlobalMinutes,
+      );
+
+      final savedOverrides =
+          prefs.getStringList('prayerReminderOverrides') ?? const <String>[];
+      if (savedOverrides.length == prayerReminders.length) {
+        _prayerReminderOverrides.setAll(
+          0,
+          savedOverrides.map((value) {
+            if (value == 'default' || value.isEmpty) {
+              return null;
+            }
+            return PrayerReminderOffset.fromMinutes(int.tryParse(value) ?? 0);
+          }).toList(),
+        );
+      }
 
       _onboardingComplete = prefs.getBool('onboardingComplete') ?? false;
 
