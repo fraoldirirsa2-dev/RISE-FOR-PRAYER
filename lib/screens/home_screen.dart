@@ -14,6 +14,7 @@ import 'package:rise_for_prayer/screens/calendar_screen.dart';
 import 'package:rise_for_prayer/screens/settings_screen.dart';
 import 'package:rise_for_prayer/services/time_service.dart';
 import 'package:rise_for_prayer/utils/localization.dart';
+import 'package:rise_for_prayer/core/app_update/widgets/app_update_dialog.dart';
 import 'package:rise_for_prayer/widgets/eth_cross.dart';
 import 'package:rise_for_prayer/widgets/gold_divider.dart';
 
@@ -32,6 +33,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _CalendarTab(),
     _SettingsTab(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Throttled automatic check on app open (runs in post frame callback so UI isn't blocked)
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final updateController = ref.read(appUpdateProvider);
+      final info = await updateController.checkForUpdate(
+        force: false,
+        checkInterval: const Duration(hours: 24),
+      );
+      if (!mounted) return;
+      if (info != null && info.isUpdateAvailable) {
+        final language = ref.read(settingsProvider).language;
+        await AppUpdateDialog.show(
+          context,
+          updateInfo: info,
+          controller: updateController,
+          language: language,
+        );
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

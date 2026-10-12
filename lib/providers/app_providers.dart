@@ -5,6 +5,7 @@ import 'package:rise_for_prayer/features/analysis/providers/analysis_provider.da
 import 'package:rise_for_prayer/providers/calendar_provider.dart';
 import 'package:rise_for_prayer/providers/prayer_provider.dart';
 import 'package:rise_for_prayer/providers/settings_provider.dart';
+import 'package:rise_for_prayer/core/app_update/controllers/app_update_controller.dart';
 import 'package:rise_for_prayer/services/time_service.dart';
 
 final settingsProvider = ChangeNotifierProvider<SettingsProvider>((ref) {
@@ -38,3 +39,8 @@ final dailyScriptureProvider = ChangeNotifierProvider<DailyScriptureProvider>((
 ) {
   return DailyScriptureProvider();
 });
+
+final appUpdateProvider = ChangeNotifierProvider<AppUpdateController>((ref) {
+  return AppUpdateController();
+});
+

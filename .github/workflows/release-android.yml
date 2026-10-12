@@ -1,0 +1,96 @@
+name: Android Release APK & GitHub Release
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger on version tags matching v1.0.0, v1.1.0, etc.
+  workflow_dispatch: # Enable manual build trigger from GitHub Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Publish Android Release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Set up Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Verify Flutter Installation
+        run: flutter --version
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Run Static Analysis
+        run: flutter analyze
+
+      - name: Run Unit & Widget Tests
+        run: flutter test
+
+      - name: Configure Android Release Signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEY_PROPERTIES: ${{ secrets.KEY_PROPERTIES }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEY_PROPERTIES" ]; then
+            echo "Configuring production release signing key from secrets..."
+            echo "$KEYSTORE_BASE64" | base64 --decode > upload-keystore.jks
+            echo "$KEY_PROPERTIES" > android/key.properties
+          elif [ -f "android/key.properties" ]; then
+            echo "Using existing android/key.properties..."
+          else
+            echo "Generating CI self-signed release key for direct distribution..."
+            keytool -genkey -v -keystore upload-keystore.jks \
+              -alias upload -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass riseforprayer123 -keypass riseforprayer123 \
+              -dname "CN=RiseForPrayer, OU=App, O=EthiopianOrthodox, L=AddisAbaba, C=ET"
+            
+            cat <<EOF > android/key.properties
+          storePassword=riseforprayer123
+          keyPassword=riseforprayer123
+          keyAlias=upload
+          storeFile=../upload-keystore.jks
+          EOF
+          fi
+
+      - name: Build Android Release APK
+        run: flutter build apk --release
+
+      - name: Calculate SHA-256 Checksum
+        run: |
+          cd build/app/outputs/flutter-apk/
+          sha256sum app-release.apk > app-release.apk.sha256
+          echo "Calculated SHA-256 checksum:"
+          cat app-release.apk.sha256
+
+      - name: Create GitHub Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/app-release.apk.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

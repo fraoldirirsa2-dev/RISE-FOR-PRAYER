@@ -6,6 +6,9 @@ import 'package:rise_for_prayer/data/prayer_reminders.dart';
 import 'package:rise_for_prayer/providers/app_providers.dart';
 import 'package:rise_for_prayer/providers/settings_provider.dart';
 import 'package:rise_for_prayer/services/notification_service.dart';
+import 'package:rise_for_prayer/core/app_update/controllers/app_update_controller.dart';
+import 'package:rise_for_prayer/core/app_update/widgets/app_update_dialog.dart';
+import 'package:rise_for_prayer/utils/colors.dart';
 import 'package:rise_for_prayer/utils/localization.dart';
 import 'package:rise_for_prayer/widgets/eth_cross.dart';
 
@@ -648,12 +651,83 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           Text(
             localizedText(
               language,
-              '\u1208\u1338\u120e\u1275 \u1270\u1290\u1231 \xb7 v1.0.0',
-              'Rise for Prayer \xb7 v1.0.0',
+              '\u1208\u1338\u120e\u1275 \u1270\u1290\u1231 \xb7 v1.0.0+1',
+              'Rise for Prayer \xb7 v1.0.0+1',
             ),
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall
                 ?.copyWith(color: colors.onSurfaceVariant),
+          ),
+          const SizedBox(height: 10),
+          Consumer(
+            builder: (context, ref, _) {
+              final updateController = ref.watch(appUpdateProvider);
+              final isChecking = updateController.status == UpdateStatus.checking;
+
+              return OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: colors.onSurface,
+                  side: BorderSide(
+                    color: AppColors.gold.withValues(alpha: 0.5),
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                ),
+                onPressed: isChecking
+                    ? null
+                    : () async {
+                        final info = await updateController.checkForUpdate(force: true);
+                        if (!context.mounted) return;
+
+                        if (info != null && info.isUpdateAvailable) {
+                          await AppUpdateDialog.show(
+                            context,
+                            updateInfo: info,
+                            controller: updateController,
+                            language: language,
+                          );
+                        } else if (info != null && !info.isUpdateAvailable) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                localizedText(
+                                  language,
+                                  'የእርስዎ መተግበሪያ አዲሱ ስሪት ላይ ነው (v${info.installedVersion.displayVersion})።',
+                                  'App is up to date (v${info.installedVersion.displayVersion}).',
+                                ),
+                              ),
+                              backgroundColor: AppColors.burgundy,
+                            ),
+                          );
+                        } else if (updateController.errorMessage != null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(updateController.errorMessage!),
+                              backgroundColor: Colors.redAccent,
+                            ),
+                          );
+                        }
+                      },
+                icon: isChecking
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.sync_rounded, size: 18, color: AppColors.gold),
+                label: Text(
+                  isChecking
+                      ? localizedText(language, 'ማሻሻያ በመፈለግ ላይ...', 'Checking for updates...')
+                      : localizedText(language, 'ማሻሻያ ፈልግ', 'Check for Updates'),
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+              );
+            },
           ),
           const SizedBox(height: 14),
           Text(
