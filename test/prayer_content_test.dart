@@ -24,7 +24,7 @@ void main() {
     );
   });
 
-  testWidgets('opening prayer omits the Marian prayer in English', (
+  testWidgets('Marian salutation appears in both prayers in English', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -46,19 +46,29 @@ void main() {
         )
         .first;
     expect(
-      find.descendant(of: openingPrayer, matching: find.text('Marian prayer')),
-      findsNothing,
-    );
-    expect(
       find.descendant(
         of: openingPrayer,
         matching: find.textContaining('O my Lady Mary I salute you'),
       ),
-      findsNothing,
+      findsOneWidget,
+    );
+
+    final closingPrayer = find
+        .ancestor(
+          of: find.text('Closing prayer'),
+          matching: find.byType(Container),
+        )
+        .first;
+    expect(
+      find.descendant(
+        of: closingPrayer,
+        matching: find.textContaining('O my Lady Mary I salute you'),
+      ),
+      findsOneWidget,
     );
   });
 
-  testWidgets('opening prayer omits the Marian prayer in Amharic', (
+  testWidgets('Marian salutation appears in both prayers in Amharic', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -77,15 +87,22 @@ void main() {
         .ancestor(of: find.text('መክፈቻ ጸሎት'), matching: find.byType(Container))
         .first;
     expect(
-      find.descendant(of: openingPrayer, matching: find.text('የማርያም ጸሎት')),
-      findsNothing,
-    );
-    expect(
       find.descendant(
         of: openingPrayer,
         matching: find.textContaining('እመቤታችን ቅድስት ድንግል ማርያም ሆይ'),
       ),
-      findsNothing,
+      findsOneWidget,
+    );
+
+    final closingPrayer = find
+        .ancestor(of: find.text('መዝጊያ ጸሎት'), matching: find.byType(Container))
+        .first;
+    expect(
+      find.descendant(
+        of: closingPrayer,
+        matching: find.textContaining('እመቤታችን ቅድስት ድንግል ማርያም ሆይ'),
+      ),
+      findsOneWidget,
     );
   });
 
@@ -127,6 +144,13 @@ void main() {
         ], isNotEmpty);
       }
     }
+  });
+
+  test('labels Psalm ranges with the correct Amharic spelling', () {
+    final label = weeklyPrayerRule.first.first.assignment;
+
+    expect(label, startsWith('መዝሙር '));
+    expect(label, isNot(contains('መዝሹር')));
   });
 
   test('rotates Scripture per hour while staying stable for the same day', () {

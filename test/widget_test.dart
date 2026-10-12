@@ -15,12 +15,12 @@ void main() {
 
     await tester.pumpWidget(const ProviderScope(child: RiseForPrayerApp()));
 
-    expect(find.text('RISE FOR PRAYER'), findsOneWidget);
+    expect(find.text('ለጸሎት ተነሱ'), findsOneWidget);
 
-    await tester.pump(const Duration(milliseconds: 1600));
+    await tester.pump(const Duration(milliseconds: 7000));
     await tester.pumpAndSettle();
 
-    expect(find.text('Seven Daily Hours'), findsOneWidget);
+    expect(find.text('ሰባቱ የጸሎት ሰዓታት'), findsOneWidget);
   });
 
   testWidgets('HomeScreen owns its live clock dependency', (tester) async {
@@ -30,8 +30,8 @@ void main() {
       const ProviderScope(child: MaterialApp(home: HomeScreen())),
     );
 
-    expect(find.text('Next Prayer Hour'), findsOneWidget);
-    expect(find.text('Starts in'), findsOneWidget);
-    expect(find.text('View Next Prayer'), findsOneWidget);
+    expect(find.text('ቀጣዩ የጸሎት ሰዓት'), findsOneWidget);
+    expect(find.text('የሚቀረው ጊዜ'), findsOneWidget);
+    expect(find.text('ቀጣዩን ጸሎት ይመልከቱ'), findsOneWidget);
   });
 }

@@ -13,7 +13,7 @@ void main() {
   testWidgets('analysis starts empty and updates after a completion', (
     tester,
   ) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'language': 'en'});
 
     final prayer = PrayerProvider();
     await tester.pumpWidget(
@@ -32,11 +32,31 @@ void main() {
     prayer.toggleHour(0);
     await tester.pump();
 
-    expect(find.text('1 / 7'), findsOneWidget);
+    expect(find.text('1'), findsWidgets);
     expect(find.text('14%'), findsWidgets);
 
     await tester.tap(find.text('30D'));
     await tester.pump();
     expect(find.text('30D'), findsOneWidget);
+    expect(find.text('Prayer Analysis'), findsOneWidget);
+  });
+
+  testWidgets('analysis follows selected language', (tester) async {
+    SharedPreferences.setMockInitialValues({'language': 'eth'});
+    final settings = SettingsProvider();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          settingsProvider.overrideWith((ref) => settings),
+        ],
+        child: const MaterialApp(home: AnalysisScreen()),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('የጸሎት ትንተና'), findsOneWidget);
+    expect(find.text('Prayer Analysis'), findsNothing);
+    expect(find.text('የጸሎት ታሪክ እየተጠራ ነው'), findsOneWidget);
   });
 }

@@ -30,7 +30,7 @@ final timeServiceProvider = ChangeNotifierProvider<TimeService>((ref) {
 });
 
 final bibleProvider = ChangeNotifierProvider<BibleProvider>((ref) {
-  return BibleProvider();
+  return BibleProvider(autoLoad: true);
 });
 
 final dailyScriptureProvider = ChangeNotifierProvider<DailyScriptureProvider>((

@@ -6,8 +6,20 @@ import 'package:rise_for_prayer/screens/settings_screen.dart';
 import 'package:rise_for_prayer/providers/app_providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:flutter/services.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('dexterous.com/flutter/local_notifications'),
+          (call) async {
+            return true;
+          },
+        );
+  });
 
   test(
     'defaults fresh installs to Amharic and preserves saved English',

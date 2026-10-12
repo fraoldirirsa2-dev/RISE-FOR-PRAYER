@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Grants access to the app-specific cache directory for downloaded APKs -->
+    <cache-path name="apk_cache" path="." />
+    <!-- Grants access to app-specific external cache directory if used -->
+    <external-cache-path name="external_apk_cache" path="." />
+</paths>

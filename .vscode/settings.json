@@ -1,5 +1,13 @@
 {
     "chat.tools.terminal.autoApprove": {
-        "flutter": true
+        "flutter": true,
+        "/^python -c \"print\\('\\\\\\\\u1218\\\\\\\\u12DD\\\\\\\\u1239\\\\\\\\u122D'\\); print\\('\\\\\\\\u1218\\\\\\\\u12DD\\\\\\\\u1219\\\\\\\\u122D'\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^python -c \"print\\(''\\.join\\(map\\(chr,\\[0x1218,0x12DD,0x1239,0x122D\\]\\)\\)\\); print\\(''\\.join\\(map\\(chr,\\[0x1218,0x12DD,0x1219,0x122D\\]\\)\\)\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }

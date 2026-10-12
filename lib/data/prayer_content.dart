@@ -153,7 +153,7 @@ const prayerReadings = [
       ),
       PrayerSection(
         title: 'Prayer',
-        amharic: 'እኩለ ሌሊት ላይ እንነሳ ስምህን እንድናመሰግን አስተምረን።',
+        amharic: 'መንፈቀ ሌሊት ላይ እንነሳ ስምህን እንድናመሰግን አስተምረን።',
         english:
             'Teach us to rise at midnight and give thanks to Your holy name.',
       ),

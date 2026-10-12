@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rise_for_prayer/data/prayer_data.dart';
 import 'package:rise_for_prayer/data/prayer_reminders.dart';
 import 'package:rise_for_prayer/providers/settings_provider.dart';
 import 'package:rise_for_prayer/services/notification_service.dart';
@@ -29,6 +30,92 @@ void main() {
       ),
       isTrue,
     );
+  });
+
+  test('includes a localized Scripture reminder for each prayer hour', () {
+    const amharicReferences = [
+      'መዝሙር 118:24',
+      'ኢሳይያስ 40:31',
+      'መዝሙር 37:3',
+      'መዝሙር 121:5-6',
+      'መዝሙር 92:2',
+      'መዝሙር 4:8',
+      'መዝሙር 119:62',
+    ];
+    const englishReferences = [
+      'Psalm 118:24',
+      'Isaiah 40:31',
+      'Psalm 37:3',
+      'Psalm 121:5-6',
+      'Psalm 92:2',
+      'Psalm 4:8',
+      'Psalm 119:62',
+    ];
+
+    for (
+      var prayerIndex = 0;
+      prayerIndex < prayerReminders.length;
+      prayerIndex++
+    ) {
+      final reminder = prayerReminders[prayerIndex];
+      final englishBody = NotificationService.prayerReminderBody(
+        language: 'en',
+        amharicTitle: reminder.amharicTitle,
+        englishTitle: reminder.englishTitle,
+        prayerIndex: prayerIndex,
+        offset: PrayerReminderOffset.atPrayerTime,
+      ).split('|').first;
+      final amharicBody = NotificationService.prayerReminderBody(
+        language: 'eth',
+        amharicTitle: reminder.amharicTitle,
+        englishTitle: reminder.englishTitle,
+        prayerIndex: prayerIndex,
+        offset: PrayerReminderOffset.atPrayerTime,
+      ).split('|').first;
+
+      expect(englishBody, contains(englishReferences[prayerIndex]));
+      expect(amharicBody, contains(amharicReferences[prayerIndex]));
+      expect(englishBody, contains('Make time for prayer'));
+      expect(amharicBody, contains('ለጸሎት ጊዜ ይለዩ'));
+      expect(englishBody, contains('has arrived'));
+      expect(amharicBody, contains('አሁን ደርሷል'));
+    }
+  });
+
+  test('keeps the prayer-specific verse in advance reminders', () {
+    final vespers = prayerReminders[4];
+    final englishBody = NotificationService.prayerReminderBody(
+      language: 'en',
+      amharicTitle: vespers.amharicTitle,
+      englishTitle: vespers.englishTitle,
+      prayerIndex: 4,
+      offset: PrayerReminderOffset.tenMinutes,
+    ).split('|').first;
+    final amharicBody = NotificationService.prayerReminderBody(
+      language: 'eth',
+      amharicTitle: vespers.amharicTitle,
+      englishTitle: vespers.englishTitle,
+      prayerIndex: 4,
+      offset: PrayerReminderOffset.tenMinutes,
+    ).split('|').first;
+
+    expect(englishBody, contains('in 10 minutes'));
+    expect(englishBody, contains('Psalm 92:2'));
+    expect(amharicBody, contains('በ10 ደቂቃ ውስጥ'));
+    expect(amharicBody, contains('መዝሙር 92:2'));
+  });
+
+  test('uses updated prayer labels and Vespers display time', () {
+    expect(hours.map((hour) => hour.ge).toList(), [
+      'ነግህ',
+      'ሠለስት',
+      'ቀትር',
+      'ተሰዓት',
+      'ሠርክ',
+      'ንዋም',
+      'መንፈቀ ሌሊት',
+    ]);
+    expect(hours[4].time, '5:00 PM');
   });
 
   test(

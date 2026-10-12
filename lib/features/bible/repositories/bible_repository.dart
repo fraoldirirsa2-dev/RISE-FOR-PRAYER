@@ -24,8 +24,18 @@ class BibleRepository {
 
   final String assetPath;
 
-  Future<List<BibleBook>> getBooks() =>
-      _booksCache.putIfAbsent(assetPath, _loadBooks);
+  Future<List<BibleBook>> getBooks() async {
+    final cached = _booksCache[assetPath];
+    if (cached != null) return cached;
+    try {
+      final books = await _loadBooks();
+      _booksCache[assetPath] = Future.value(books);
+      return books;
+    } catch (_) {
+      _booksCache.remove(assetPath);
+      rethrow;
+    }
+  }
 
   Future<List<BibleBook>> _loadBooks() async {
     final paths = await _bookAssetPaths();
@@ -121,10 +131,17 @@ class BibleRepository {
         .toList(growable: false);
   }
 
-  Future<BiblePassage> getRandomPassage({Random? random}) async {
+  Future<BiblePassage> getRandomPassage({
+    Random? random,
+    bool requireEnglish = true,
+  }) async {
     final source = random ?? Random();
     final paths = await _bookAssetPaths();
-    for (var attempt = 0; attempt < 12; attempt++) {
+    BiblePassage? fallbackPassage;
+
+    // Up to 30 attempts to find an aligned passage with English text.
+    final maxAttempts = requireEnglish ? 30 : 12;
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
       final path = paths[source.nextInt(paths.length)];
       final bookData = await _loadBook(path);
       final chapterCount = (bookData['chapters'] as List<dynamic>).length;
@@ -145,8 +162,20 @@ class BibleRepository {
             '${bookData['title']} $chapter:${selected.first.verse}'
             '${length > 1 ? '-${selected.last.verse}' : ''}',
       );
-      return BiblePassage(reference: reference, verses: selected);
+      final passage = BiblePassage(reference: reference, verses: selected);
+
+      if (requireEnglish) {
+        final hasEnglish = selected.every((v) => v.englishText != null && v.englishText!.trim().isNotEmpty);
+        if (hasEnglish) {
+          return passage;
+        }
+        fallbackPassage ??= passage;
+      } else {
+        return passage;
+      }
     }
+
+    if (fallbackPassage != null) return fallbackPassage;
     throw const BibleSourceException('Unable to select Scripture. Try again.');
   }
 
@@ -164,6 +193,7 @@ class BibleRepository {
             .toList()
           ..sort();
     if (paths.isEmpty) {
+      await Future<void>.value();
       throw const BibleSourceException(
         'No Bible book files were found under assets/bible/.',
       );

@@ -39,8 +39,23 @@ class DailyScriptureProvider extends ChangeNotifier {
   String? get error => _error;
   bool get loading => _loading;
 
+  Future<void>? _activeLoad;
+
   Future<void> loadDaily() async {
-    if (_loading || _disposed) return;
+    if (_disposed) return;
+    if (_activeLoad != null) return _activeLoad;
+    final future = _executeLoadDaily();
+    _activeLoad = future;
+    try {
+      await future;
+    } finally {
+      if (_activeLoad == future) {
+        _activeLoad = null;
+      }
+    }
+  }
+
+  Future<void> _executeLoadDaily() async {
     _loading = true;
     notifyListeners();
     try {

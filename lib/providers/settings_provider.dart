@@ -421,6 +421,7 @@ class SettingsProvider extends ChangeNotifier {
         language: _language,
         amharicTitle: reminder.amharicTitle,
         englishTitle: reminder.englishTitle,
+        prayerIndex: index,
         offset: effectiveOffset,
       );
 

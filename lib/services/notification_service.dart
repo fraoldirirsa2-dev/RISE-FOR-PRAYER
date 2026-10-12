@@ -58,6 +58,51 @@ tz.TZDateTime nextPrayerReminderDate({
   return reminderDate;
 }
 
+const _prayerReminderVerses = <({String amharic, String english})>[
+  (
+    amharic:
+        '“እግዚአብሔር የሠራው ቀን ይህች ናት; በእርሷ ደስ ይበለን ሕዝብም በእርሷ እናስብ።” — (መዝሙር 118:24)',
+    english:
+        '“This is the day which the Lord hath made; we will rejoice and be glad in it.” — Psalm 118:24',
+  ),
+  (
+    amharic:
+        '“እግዚአብሔርን የሚጠባበቁ ኃይላቸውን ያድሳሉ፤ እንደ ንስር ጸንተው ይበርራሉ፤ ይሮጣሉም አያውጡም፥ ይሄዳሉም አይደክሙም።” — (ኢሳይያስ 40:31)',
+    english:
+        '“They that wait upon the Lord shall renew their strength; they shall mount up with wings as eagles; they shall run, and not be weary; and they shall walk, and not faint.” — Isaiah 40:31',
+  ),
+  (
+    amharic:
+        '“በእግዚአብሔር ታመን፥ መልካምንም አድርግ፤ በምድርም ተቀመጥ፥ እውነትንም ተመገብ።” — (መዝሙር 37:3)',
+    english:
+        '“Trust in the Lord, and do good; so shalt thou dwell in the land, and verily thou shalt be fed.” — Psalm 37:3',
+  ),
+  (
+    amharic:
+        '“እግዚአብሔር ጠባቂህ ነው፤ እግዚአብሔር በቀኝ እጅህ ጥላህ ነው። ፀሐይ በቀን አትመታህም ጨረቃም በሌሊት።” — (መዝሙር 121:5-6)',
+    english:
+        '“The Lord is thy keeper: the Lord is thy shade upon thy right hand. The sun shall not smite thee by day, nor the moon by night.” — Psalm 121:5-6',
+  ),
+  (
+    amharic:
+        '“ማለዳ ምሕረትህን፥ ሌሊቱንም እውነትህን እናገር ዘንድ መልካም ነው...” — (መዝሙር 92:2)',
+    english:
+        '“To shew forth thy lovingkindness in the morning, and thy faithfulness every night.” — Psalm 92:2',
+  ),
+  (
+    amharic:
+        '“በሰላም እተኛለሁ አንቀላፌም፤ አቤቱ፥ አንተ ብቻህን በእምነት ታኖረኛለህና።” — (መዝሙር 4:8)',
+    english:
+        '“I will both lay me down in peace, and sleep: for thou, Lord, only makest me dwell in safety.” — Psalm 4:8',
+  ),
+  (
+    amharic:
+        '“ስለ ጻድቅ ፍርድህ እኩለ ሌሊት እነሣለሁ፥ አመሰግንህም ዘንድ።” — (መዝሙር 119:62)',
+    english:
+        '“At midnight I will rise to give thanks unto thee because of thy righteous judgments.” — Psalm 119:62',
+  ),
+];
+
 class NotificationService {
   NotificationService._();
 
@@ -608,18 +653,20 @@ class NotificationService {
     required String language,
     required String amharicTitle,
     required String englishTitle,
+    required int prayerIndex,
     required PrayerReminderOffset offset,
   }) {
     final minutes = offset.minutes;
-
-    if (offset == PrayerReminderOffset.atPrayerTime) {
-      return language == 'eth'
-          ? 'የ$amharicTitle ሰዓት አሁን ደርሷል።|Prayer time for $englishTitle is now.'
-          : 'Prayer time for $englishTitle is now.|የ$amharicTitle ሰዓት አሁን ደርሷል።';
-    }
-
-    final amharicText = 'የ$amharicTitle ሰዓት በ$minutes ደቂቃ ውስጥ ነው።';
-    final englishText = 'Prayer time for $englishTitle is in $minutes minutes.';
+    final verse = _prayerReminderVerses[prayerIndex];
+    final isPrayerTime = offset == PrayerReminderOffset.atPrayerTime;
+    final amharicNotice = isPrayerTime
+        ? 'ለጸሎት ጊዜ ይለዩ፤ የ$amharicTitle ጸሎት ሰዓት አሁን ደርሷል።'
+        : 'ለጸሎት ጊዜ ይለዩ፤ የ$amharicTitle ጸሎት ሰዓት በ$minutes ደቂቃ ውስጥ ይደርሳል።';
+    final englishNotice = isPrayerTime
+        ? 'Make time for prayer. Prayer time for $englishTitle has arrived.'
+        : 'Make time for prayer. Prayer time for $englishTitle is in $minutes minutes.';
+    final amharicText = '$amharicNotice\n${verse.amharic}';
+    final englishText = '$englishNotice\n${verse.english}';
 
     return language == 'eth'
         ? '$amharicText|$englishText'

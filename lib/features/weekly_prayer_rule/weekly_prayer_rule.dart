@@ -206,13 +206,13 @@ class WeeklyPrayerRuleReading extends StatelessWidget {
 
 const _days = ['ሰኞ', 'ማክሰኞ', 'ረቡዕ', 'ሐሙስ', 'ዓርብ', 'ቅዳሜ', 'እሑድ'];
 const _hours = [
-  ('ቀዳሚት', 'Prime', '12:00 ሰዓት'),
-  ('ሦስተኛ', 'Terce', '3:00 ሰዓት'),
-  ('ስድስተኛ', 'Sext', '6:00 ሰዓት'),
-  ('ዘጠነኛ', 'Nones', '9:00 ሰዓት'),
-  ('ምሽት', 'Vespers', '11:00 ሰዓት'),
-  ('ሌሊት', 'Compline', 'የመኝታ ጊዜ'),
-  ('መንፈቀ ሌሊት', 'Midnight', 'እኩለ ሌሊት'),
+  ('ነግህ', 'Prime', '12:00 ሰዓት'),
+  ('ሠለስት', 'Terce', '3:00 ሰዓት'),
+  ('ቀትር', 'Sext', '6:00 ሰዓት'),
+  ('ተሰዓት', 'Nones', '9:00 ሰዓት'),
+  ('ሠርክ', 'Vespers', '11:00 ሰዓት'),
+  ('ንዋም', 'Compline', 'የመኝታ ጊዜ'),
+  ('መንፈቀ ሌሊት', 'Midnight', 'መንፈቀ ሌሊት'),
 ];
 const _daysEn = [
   'Monday',
@@ -228,7 +228,7 @@ const _hourTimesEn = [
   '9:00 AM',
   '12:00 PM',
   '3:00 PM',
-  '6:00 PM',
+  '5:00 PM',
   '9:00 PM',
   '12:00 AM',
 ];
@@ -346,7 +346,7 @@ String _psalmRangeLabel(List<int> chapters) {
   final range = chapters.length == 1
       ? '${chapters.first}'
       : '${chapters.first}\u2013${chapters.last}';
-  return '\u1218\u12DD\u1239\u122D $range';
+  return '\u1218\u12DD\u1219\u122D $range';
 }
 
 String _assignmentLabel(RuleHour item, int day, int hour, String language) {
@@ -402,10 +402,6 @@ Glory To The Father, Glory To The Son, Glory To The Holy Spirit (Three Times). G
 
 Let us give glory and thanks of God the Most High and to his Virgin Mother and to his precious Cross. May the name of the Lord be thanked and glorified always at all times and at every hour.
 ''';
-const String _marianPrayerEnglish = '''
-By the Salutation of the Saint Angel Gabriel, O my Lady Mary I salute you, thou are Virgin in thought, and Virgin in body the Mother of God Tsabaot. (The Lord of Hosts) salutation to you. Blessed art thou, among women and blessed is the fruit of your womb. Rejoice thou who is hailed, O Graceful God is with you. Beseech and pray for our mercy to you beloved Son JESUS CHRIST that he may forgive us our sins. AMEN
-''';
-
 const String _common = '''
 በጌታዬ በኢየሱስ ክርስቶስ ትዕምርተ መስቀል ፊቴንና መላ ሰውነቴን ሦስት ጊዜ አማትባለሁ፡፡ አንድ አምላክ በሆኑ በአብ በወልድ በመንፈስ ቅዱስ ስም ንጹሕ ልዩ ክቡር ጽሩይ በሆኑ በሦስትነት ወይም በሥላሴ እያመንኩና እየተማጸንኩ ጠላቴ ሰይጣንን እክድሃለሁ፤ በዚህች በእናቴ በቤተ ክርስቲያን ፊት ቁሜ እክድሃለሁ ለዚህም ምስክሬ ማርያም ናት። በዚህም ዓለም በወዲያኛውም ዓለም እሷን አምባ መጠጊያ አድርጌ እክድሃለሁ።
 
@@ -430,10 +426,6 @@ const String _common = '''
 እርሱንም በማምለክ ያፀናን ዘንድ። እመቤታችን ጸሎታችንን አሳርጊልን ኃጢአታችንንም አስተሥርዪልን በጌታችን መንበር ፊት ጸሎታችንን አሳርጊልን ይህንን ኅብስት ላበላን ይህንንም ጽዋ ላጠጣን ምግባችንንና ልብሳችንንም ላዘጋጀልን ፤ ኃጢአታችንንም ሁሉ ለታገሰልን ፤ ክቡር ደሙን ቅዱስ ሥጋውን ለሰጠን ፤ እስከዚህችም ሰዓት ላደረሰን፤ ለእርሱ ለልዑል እግዚአብሔር ፍጹም ምስጋና ይገባል ለወለደችው ለድንግልም ምስጋና ይገባል። ለክቡር መስቀሉም ምስጋና ይገባል። የእግዚአብሔር ስሙ ፈጽሞ ይመሰገን ዘንድ ዘወትር በየጊዜያቱና በየሰዓቱ ምስጋና ይገባል።
 ''';
 
-const String _marianPrayer = '''
-እመቤታችን ቅድስት ድንግል ማርያም ሆይ በመልአኩ በቅዱስ ገብርኤል ሰላምታ ሰላም እልሻለሁ። በሀሳብሽ ድንግል ነሽ በሥጋሽም ድንግል ነሽ። የአቸናፊ የእግዚአብሔር እናት ሆይ ለአንቺ ሰላምታ ይገባል ከሴቶቹ ሁሉ ተለይተሽ አንቺ የተባረክሽ ነሽና የማኅፀንሽም ፍሬ የተባረከ ነው። ጸጋን የተመላሽ ሆይ ደስ ይበልሽ እግዚአብሔር ከአንቺ ጋር ነውና ከተወደደው ልጅሽ ከጌታችን ከመድኃኒታችን ከኢየሱስ ክርስቶስ ዘንድ ይቅርታንና ምሕረትን ለምኝልን ኃጢአታችንንም ያስተሠርይልን ዘንድ ለዘለዓለሙ አሜን።
-''';
-
 const String _closingOurFather = '''
 አባታችን ሆይ በሰማያት የምትኖር ስምህ ይቀደስ መንግሥትህ ትምጣ ፈቃድህ በሰማይ እንደሆነች እንዲሁም በምድር ትሁን የዕለት እንጀራችንን ስጠን ዛሬ፤በደላችንንም ይቅር በለን እኛም የበደሉንን ይቅር እንደምንል። አቤቱ ወደ ፈተናም አታግባን ከክፉ ሁሉ አድነን እንጂ መንግሥት የአንተ ናትና ኃይል ክብር ምስጋና ለዘለዓለሙ አሜን።
 ''';
@@ -443,10 +435,7 @@ const String _closingMarianPrayer = '''
 ''';
 
 String _openingPrayerText(String language) {
-  final isAmharic = language == 'eth';
-  final commonPrayer = isAmharic ? _common : _commonEnglish;
-  final marianPrayer = isAmharic ? _marianPrayer : _marianPrayerEnglish;
-  return commonPrayer.replaceFirst(marianPrayer, '').trim();
+  return (language == 'eth' ? _common : _commonEnglish).trim();
 }
 
 const String _closingOurFatherEnglish = '''
@@ -760,7 +749,7 @@ class _RuleHourTile extends StatelessWidget {
                           if (item.midnightPsalmChapters.isNotEmpty)
                             localizedText(
                               language,
-                              'የእኩለ ሌሊት መዝሙር ${item.midnightPsalmChapters.first}–${item.midnightPsalmChapters.last}',
+                              'የመንፈቀ ሌሊት መዝሙር ${item.midnightPsalmChapters.first}–${item.midnightPsalmChapters.last}',
                               'Midnight Psalms ${item.midnightPsalmChapters.first}–${item.midnightPsalmChapters.last}',
                             ),
                         ].join(' · '),
@@ -810,6 +799,8 @@ class _RuleSessionScreenState extends ConsumerState<RuleSessionScreen> {
   bool _showCelebration = false;
   bool _leavingAfterCompletion = false;
   bool _isUpcomingHour = false;
+  double _sessionFontSize = 19.0;
+  bool _parchmentMode = false;
   Timer? _unlockTimer;
   @override
   void initState() {
@@ -848,7 +839,29 @@ class _RuleSessionScreenState extends ConsumerState<RuleSessionScreen> {
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
-    if (mounted) setState(() => done = prefs.getBool(_key) ?? false);
+    if (mounted) {
+      setState(() {
+        done = prefs.getBool(_key) ?? false;
+        _sessionFontSize = (prefs.getDouble('prayer_reading_font_size') ?? 19.0)
+            .clamp(15.0, 30.0);
+        _parchmentMode =
+            prefs.getBool('prayer_reading_parchment_mode') ?? false;
+      });
+    }
+  }
+
+  Future<void> _adjustFontSize(double delta) async {
+    final newSize = (_sessionFontSize + delta).clamp(15.0, 30.0);
+    setState(() => _sessionFontSize = newSize);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('prayer_reading_font_size', newSize);
+  }
+
+  Future<void> _toggleParchmentMode() async {
+    final nextMode = !_parchmentMode;
+    setState(() => _parchmentMode = nextMode);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('prayer_reading_parchment_mode', nextMode);
   }
 
   String get _key =>
@@ -893,10 +906,25 @@ class _RuleSessionScreenState extends ConsumerState<RuleSessionScreen> {
   Widget build(BuildContext context) {
     final item = weeklyPrayerRule[widget.day][widget.hour];
     final language = ref.watch(settingsProvider).language;
-    const textSize = 19.0;
+    final textSize = _sessionFontSize;
     final isEnglish = language == 'en';
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+
+    // Optional parchment theme colors for traditional manuscript reading ambiance
+    final parchmentBg = const Color(0xFFF6F0E6);
+    final parchmentSurface = const Color(0xFFFCF9F3);
+    final parchmentText = const Color(0xFF261D16);
+    final parchmentBorder = const Color(0xFFDFD4C2);
+
+    final effectiveSurface = _parchmentMode ? parchmentSurface : colors.surface;
+    final effectiveTextColor = _parchmentMode
+        ? parchmentText
+        : colors.onSurface;
+    final effectiveBorderColor = _parchmentMode
+        ? parchmentBorder
+        : colors.outlineVariant.withValues(alpha: .35);
+
     TextStyle ethiopic({
       double size = 19,
       FontWeight weight = FontWeight.normal,
@@ -905,16 +933,16 @@ class _RuleSessionScreenState extends ConsumerState<RuleSessionScreen> {
       fontSize: size,
       fontWeight: weight,
       height: 1.85,
-      color: colors.onSurface,
+      color: effectiveTextColor,
     );
     Widget section(String title, Widget child) => Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: colors.surface,
+        color: effectiveSurface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: colors.outlineVariant.withValues(alpha: .35)),
+        border: Border.all(color: effectiveBorderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -925,9 +953,13 @@ class _RuleSessionScreenState extends ConsumerState<RuleSessionScreen> {
                 ? GoogleFonts.cinzel(
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
-                    color: colors.primary,
+                    color: _parchmentMode
+                        ? const Color(0xFF8B4513)
+                        : colors.primary,
                   )
-                : ethiopic(size: 22, weight: FontWeight.w600),
+                : ethiopic(size: 22, weight: FontWeight.w600).copyWith(
+                    color: _parchmentMode ? const Color(0xFF8B4513) : null,
+                  ),
           ),
           const SizedBox(height: 12),
           child,
@@ -936,13 +968,54 @@ class _RuleSessionScreenState extends ConsumerState<RuleSessionScreen> {
     );
 
     return Scaffold(
+      backgroundColor: _parchmentMode ? parchmentBg : null,
       appBar: AppBar(
+        backgroundColor: _parchmentMode ? parchmentBg : null,
         title: Text(
           localizedText(language, item.am, item.en),
           style: isEnglish
-              ? GoogleFonts.cinzel(fontSize: 18, fontWeight: FontWeight.w600)
-              : ethiopic(size: 22, weight: FontWeight.w600),
+              ? GoogleFonts.cinzel(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: _parchmentMode ? parchmentText : null,
+                )
+              : ethiopic(
+                  size: 22,
+                  weight: FontWeight.w600,
+                ).copyWith(color: _parchmentMode ? parchmentText : null),
         ),
+        actions: [
+          IconButton(
+            tooltip: localizedText(
+              language,
+              _parchmentMode ? 'መደበኛ ገጽታ' : 'የብራና ገጽታ',
+              _parchmentMode ? 'Default theme' : 'Parchment mode',
+            ),
+            icon: Icon(
+              _parchmentMode ? Icons.auto_stories : Icons.auto_stories_outlined,
+              color: _parchmentMode ? const Color(0xFF8B4513) : null,
+            ),
+            onPressed: _toggleParchmentMode,
+          ),
+          IconButton(
+            tooltip: localizedText(
+              language,
+              'የፊደል መጠን ቀንስ',
+              'Decrease font size',
+            ),
+            icon: const Icon(Icons.text_decrease),
+            onPressed: _sessionFontSize > 15 ? () => _adjustFontSize(-2) : null,
+          ),
+          IconButton(
+            tooltip: localizedText(
+              language,
+              'የፊደል መጠን ጨምር',
+              'Increase font size',
+            ),
+            icon: const Icon(Icons.text_increase),
+            onPressed: _sessionFontSize < 30 ? () => _adjustFontSize(2) : null,
+          ),
+        ],
       ),
       body: Stack(
         children: [
@@ -956,15 +1029,24 @@ class _RuleSessionScreenState extends ConsumerState<RuleSessionScreen> {
                     margin: const EdgeInsets.only(bottom: 14),
                     padding: const EdgeInsets.all(22),
                     decoration: BoxDecoration(
-                      color: colors.primaryContainer,
+                      color: _parchmentMode
+                          ? const Color(0xFFEDE0CB)
+                          : colors.primaryContainer,
                       borderRadius: BorderRadius.circular(24),
+                      border: _parchmentMode
+                          ? Border.all(color: const Color(0xFFD3BF9E))
+                          : null,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           '${localizedText(language, _days[widget.day], _daysEn[widget.day])}  |  ${widget.hour + 1} / 7',
-                          style: theme.textTheme.labelLarge,
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: _parchmentMode
+                                ? const Color(0xFF6B4226)
+                                : null,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         Text(
@@ -974,18 +1056,26 @@ class _RuleSessionScreenState extends ConsumerState<RuleSessionScreen> {
                               ? GoogleFonts.cinzel(
                                   fontSize: 27,
                                   fontWeight: FontWeight.w700,
-                                  color: colors.onPrimaryContainer,
+                                  color: _parchmentMode
+                                      ? const Color(0xFF4A2E1B)
+                                      : colors.onPrimaryContainer,
                                 )
                               : ethiopic(
                                   size: 28,
                                   weight: FontWeight.w600,
-                                ).copyWith(color: colors.onPrimaryContainer),
+                                ).copyWith(
+                                  color: _parchmentMode
+                                      ? const Color(0xFF4A2E1B)
+                                      : colors.onPrimaryContainer,
+                                ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           '${localizedText(language, item.time, _hourTimesEn[widget.hour])}  |  ${localizedText(language, 'ሰዓት', 'Prayer hour')}',
                           style: theme.textTheme.titleMedium?.copyWith(
-                            color: colors.onPrimaryContainer,
+                            color: _parchmentMode
+                                ? const Color(0xFF6B4226)
+                                : colors.onPrimaryContainer,
                           ),
                         ),
                       ],
@@ -1027,6 +1117,7 @@ class _RuleSessionScreenState extends ConsumerState<RuleSessionScreen> {
                               ? GoogleFonts.ebGaramond(
                                   fontSize: textSize,
                                   height: 1.7,
+                                  color: effectiveTextColor,
                                 )
                               : ethiopic(size: textSize),
                         ),
@@ -1043,6 +1134,7 @@ class _RuleSessionScreenState extends ConsumerState<RuleSessionScreen> {
                                 ? GoogleFonts.ebGaramond(
                                     fontSize: textSize,
                                     height: 1.7,
+                                    color: effectiveTextColor,
                                   )
                                 : ethiopic(size: textSize),
                           ),
@@ -1057,6 +1149,7 @@ class _RuleSessionScreenState extends ConsumerState<RuleSessionScreen> {
                                 ? GoogleFonts.ebGaramond(
                                     fontSize: textSize,
                                     height: 1.7,
+                                    color: effectiveTextColor,
                                   )
                                 : ethiopic(size: textSize),
                           ),
@@ -1117,6 +1210,7 @@ class _RuleSessionScreenState extends ConsumerState<RuleSessionScreen> {
                               ? GoogleFonts.ebGaramond(
                                   fontSize: textSize,
                                   height: 1.7,
+                                  color: effectiveTextColor,
                                 )
                               : ethiopic(size: textSize),
                         ),
@@ -1129,6 +1223,7 @@ class _RuleSessionScreenState extends ConsumerState<RuleSessionScreen> {
                               ? GoogleFonts.ebGaramond(
                                   fontSize: textSize,
                                   height: 1.7,
+                                  color: effectiveTextColor,
                                 )
                               : ethiopic(size: textSize),
                         ),

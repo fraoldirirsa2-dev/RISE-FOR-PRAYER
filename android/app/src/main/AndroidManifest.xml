@@ -12,6 +12,12 @@
     <!-- Re-schedule notifications after reboot -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Internet permission for checking updates and downloading release APKs -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Direct APK in-app installation permission for user-confirmed updates -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <application
         android:name="${applicationName}"
         android:label="ለጸሎት ተነሱ"

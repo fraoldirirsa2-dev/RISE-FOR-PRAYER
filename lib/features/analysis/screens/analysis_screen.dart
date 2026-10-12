@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rise_for_prayer/data/prayer_data.dart';
@@ -7,8 +8,12 @@ import 'package:rise_for_prayer/providers/prayer_provider.dart';
 import 'package:rise_for_prayer/providers/app_providers.dart';
 import 'package:rise_for_prayer/utils/localization.dart';
 import 'package:rise_for_prayer/utils/constants.dart';
+import 'package:rise_for_prayer/utils/colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// AnalysisScreen – Top-level
+// ─────────────────────────────────────────────────────────────────────────────
 class AnalysisScreen extends ConsumerWidget {
   const AnalysisScreen({super.key});
 
@@ -21,22 +26,16 @@ class AnalysisScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('የጸሎት ትንተና', style: Theme.of(context).textTheme.titleMedium),
-            Text(
-              'Prayer Analysis',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
+        title: Text(
+          localizedText(language, 'የጸሎት ትንተና', 'Prayer Analysis'),
+          style: Theme.of(context).textTheme.titleMedium,
         ),
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
           final wide = constraints.maxWidth >= 760;
           return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1100),
@@ -48,27 +47,42 @@ class AnalysisScreen extends ConsumerWidget {
                       prayer: prayer,
                       language: language,
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
                     if (!summary.hasHistory ||
                         summary.dailyStatistics.isEmpty) ...[
                       _EmptyAnalysisState(language: language),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
                     ] else ...[
+                      // ── Hero ring card ──
+                      _HeroProgressCard(
+                        completedHours: prayer.completedHours,
+                        summary: summary,
+                        language: language,
+                      ),
+                      const SizedBox(height: 16),
+                      // ── Quick stats row ──
+                      _QuickStatsRow(
+                        summary: summary,
+                        language: language,
+                      ),
+                      const SizedBox(height: 20),
+                      // ── Trend chart ──
+                      _TrendChart(summary: summary, language: language),
+                      const SizedBox(height: 16),
+                      // ── Prayer-hour breakdown + Highlights ──
                       if (wide)
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
-                              flex: 3,
-                              child: _TodayPrayerJourney(
-                                completedHours: prayer.completedHours,
+                              child: _HourBreakdownCard(
+                                summary: summary,
                                 language: language,
                               ),
                             ),
                             const SizedBox(width: 16),
                             Expanded(
-                              flex: 2,
-                              child: _SupportingMetrics(
+                              child: _HighlightsCard(
                                 summary: summary,
                                 language: language,
                               ),
@@ -76,42 +90,15 @@ class AnalysisScreen extends ConsumerWidget {
                           ],
                         )
                       else ...[
-                        _TodayPrayerJourney(
-                          completedHours: prayer.completedHours,
-                          language: language,
-                        ),
-                        const SizedBox(height: 14),
-                        _SupportingMetrics(
+                        _HourBreakdownCard(
                           summary: summary,
                           language: language,
                         ),
-                      ],
-                      const SizedBox(height: 20),
-                      _WeeklyChart(summary: summary, language: language),
-                      const SizedBox(height: 16),
-                      if (wide)
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: _PerformanceCard(
-                                summary: summary,
-                                language: language,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: _StreakCard(
-                                summary: summary,
-                                language: language,
-                              ),
-                            ),
-                          ],
-                        )
-                      else ...[
-                        _PerformanceCard(summary: summary, language: language),
                         const SizedBox(height: 16),
-                        _StreakCard(summary: summary, language: language),
+                        _HighlightsCard(
+                          summary: summary,
+                          language: language,
+                        ),
                       ],
                     ],
                     const SizedBox(height: 16),
@@ -130,6 +117,9 @@ class AnalysisScreen extends ConsumerWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Range selector – pill-style segmented control
+// ─────────────────────────────────────────────────────────────────────────────
 class _RangeSelector extends StatelessWidget {
   const _RangeSelector({
     required this.analysis,
@@ -143,32 +133,60 @@ class _RangeSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SegmentedButton<int>(
-      segments: [
-        ButtonSegment(
-          value: 7,
-          label: Text(localizedText(language, '7 ቀን', '7D')),
-        ),
-        ButtonSegment(
-          value: 30,
-          label: Text(localizedText(language, '30 ቀን', '30D')),
-        ),
-        ButtonSegment(
-          value: 90,
-          label: Text(localizedText(language, '3 ወር', '3M')),
-        ),
-        ButtonSegment(
-          value: 365,
-          label: Text(localizedText(language, '1 ዓመት', '1Y')),
-        ),
-      ],
-      selected: {analysis.rangeDays},
-      onSelectionChanged: (selection) =>
-          analysis.setRange(selection.first, prayer),
+    final colors = Theme.of(context).colorScheme;
+    final entries = [
+      (7, localizedText(language, '7 ቀን', '7D')),
+      (30, localizedText(language, '30 ቀን', '30D')),
+      (90, localizedText(language, '3 ወር', '3M')),
+      (365, localizedText(language, '1 ዓመት', '1Y')),
+    ];
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        children: [
+          for (final entry in entries)
+            Expanded(
+              child: GestureDetector(
+                onTap: () => analysis.setRange(entry.$1, prayer),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOut,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: analysis.rangeDays == entry.$1
+                        ? colors.primary
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    entry.$2,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: analysis.rangeDays == entry.$1
+                          ? colors.onPrimary
+                          : colors.onSurface.withValues(alpha: 0.7),
+                      fontWeight: analysis.rangeDays == entry.$1
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Empty state
+// ─────────────────────────────────────────────────────────────────────────────
 class _EmptyAnalysisState extends StatelessWidget {
   const _EmptyAnalysisState({required this.language});
 
@@ -179,16 +197,27 @@ class _EmptyAnalysisState extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: colors.outlineVariant),
       ),
       child: Column(
         children: [
-          Icon(Icons.self_improvement, size: 34, color: colors.secondary),
-          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: colors.primary.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.self_improvement,
+              size: 38,
+              color: colors.primary,
+            ),
+          ),
+          const SizedBox(height: 18),
           Text(
             localizedText(
               language,
@@ -198,7 +227,7 @@ class _EmptyAnalysisState extends StatelessWidget {
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.titleMedium,
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
             localizedText(
               language,
@@ -214,6 +243,9 @@ class _EmptyAnalysisState extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Hero progress card – circular ring + today's hours
+// ─────────────────────────────────────────────────────────────────────────────
 const _prayerHourNamesAmharic = [
   'ነግህ',
   'ሠለስት',
@@ -224,111 +256,219 @@ const _prayerHourNamesAmharic = [
   'መንፈቀ ሌሊት',
 ];
 
-class _TodayPrayerJourney extends StatelessWidget {
-  const _TodayPrayerJourney({
+class _HeroProgressCard extends StatelessWidget {
+  const _HeroProgressCard({
     required this.completedHours,
+    required this.summary,
     required this.language,
   });
 
   final List<bool> completedHours;
+  final PrayerAnalysisSummary summary;
   final String language;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final completed = completedHours.where((value) => value).length;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final completed = completedHours.where((v) => v).length;
     final rate = completed / 7;
+
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: colors.primaryContainer,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(22),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [
+                  const Color(0xFF1A0F20),
+                  const Color(0xFF2A1520),
+                  const Color(0xFF1A0F20),
+                ]
+              : [
+                  const Color(0xFF5B1424),
+                  const Color(0xFF7A1D33),
+                  const Color(0xFF5B1424),
+                ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.burgundy.withValues(alpha: 0.22),
+            blurRadius: 22,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            localizedText(language, 'የዛሬ የጸሎት ጉዞ', "Today's Prayer Journey"),
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: colors.onPrimaryContainer,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '$completed / 7',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  color: colors.onPrimaryContainer,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  _percent(rate),
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: colors.primary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Semantics(
-            label: localizedText(
-              language,
-              'ከ7 የጸሎት ሰዓታት ውስጥ $completed ተጠናቋል፣ ${_percent(rate)}',
-              '$completed of 7 prayer hours completed, ${_percent(rate)}',
-            ),
-            child: ExcludeSemantics(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: LinearProgressIndicator(
-                  value: rate,
-                  minHeight: 10,
-                  color: colors.primary,
-                  backgroundColor: colors.onPrimaryContainer.withValues(
-                    alpha: 0.12,
-                  ),
-                ),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            // ── Title ──
+            Text(
+              localizedText(language, 'የዛሬ የጸሎት ጉዞ', "Today's Prayer Journey"),
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
               ),
             ),
-          ),
-          const SizedBox(height: 18),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final columns = constraints.maxWidth >= 900
-                  ? 7
-                  : constraints.maxWidth >= 560
-                  ? 4
-                  : 2;
-              final gap = 8.0;
-              final width =
-                  (constraints.maxWidth - gap * (columns - 1)) / columns;
-              return Wrap(
-                spacing: gap,
-                runSpacing: 8,
-                children: [
-                  for (var index = 0; index < 7; index++)
-                    SizedBox(
-                      width: width,
-                      child: _PrayerHourStatus(
-                        index: index,
-                        completed:
-                            index < completedHours.length &&
-                            completedHours[index],
-                        language: language,
+            const SizedBox(height: 24),
+            // ── Ring + Score ──
+            Row(
+              children: [
+                // Circular progress
+                SizedBox(
+                  width: 110,
+                  height: 110,
+                  child: CustomPaint(
+                    painter: _CircularProgressPainter(
+                      progress: rate,
+                      trackColor: Colors.white.withValues(alpha: 0.12),
+                      progressColor: AppColors.gold,
+                      strokeWidth: 8,
+                    ),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '$completed',
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineMedium
+                                ?.copyWith(
+                                  color: AppColors.gold,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                          Text(
+                            localizedText(language, 'ከ 7', 'of 7'),
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                ),
+                          ),
+                        ],
                       ),
                     ),
-                ],
-              );
-            },
+                  ),
+                ),
+                const SizedBox(width: 24),
+                // Prayer hour status chips
+                Expanded(
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (var i = 0; i < 7; i++)
+                        _PrayerChip(
+                          name: localizedText(
+                            language,
+                            _prayerHourNamesAmharic[i],
+                            hours[i].en,
+                          ),
+                          completed: i < completedHours.length &&
+                              completedHours[i],
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            // ── Completion bar ──
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      localizedText(language, 'እድገት', 'Progress'),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.65),
+                      ),
+                    ),
+                    Text(
+                      _percent(rate),
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: AppColors.gold,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Semantics(
+                  label: localizedText(
+                    language,
+                    'ከ7 የጸሎት ሰዓታት ውስጥ $completed ተጠናቋል፣ ${_percent(rate)}',
+                    '$completed of 7 prayer hours completed, ${_percent(rate)}',
+                  ),
+                  child: ExcludeSemantics(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: LinearProgressIndicator(
+                        value: rate,
+                        minHeight: 8,
+                        color: AppColors.gold,
+                        backgroundColor: Colors.white.withValues(alpha: 0.12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PrayerChip extends StatelessWidget {
+  const _PrayerChip({required this.name, required this.completed});
+
+  final String name;
+  final bool completed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: completed
+            ? AppColors.gold.withValues(alpha: 0.18)
+            : Colors.white.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: completed
+              ? AppColors.gold.withValues(alpha: 0.5)
+              : Colors.white.withValues(alpha: 0.15),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            completed ? Icons.check_circle : Icons.radio_button_unchecked,
+            size: 14,
+            color: completed
+                ? AppColors.gold
+                : Colors.white.withValues(alpha: 0.45),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            name,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: completed
+                  ? AppColors.gold
+                  : Colors.white.withValues(alpha: 0.6),
+              fontWeight: completed ? FontWeight.w600 : FontWeight.w400,
+              fontSize: 11,
+            ),
           ),
         ],
       ),
@@ -336,175 +476,138 @@ class _TodayPrayerJourney extends StatelessWidget {
   }
 }
 
-class _PrayerHourStatus extends StatelessWidget {
-  const _PrayerHourStatus({
-    required this.index,
-    required this.completed,
-    required this.language,
-  });
-
-  final int index;
-  final bool completed;
-  final String language;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final hourName = localizedText(
-      language,
-      _prayerHourNamesAmharic[index],
-      hours[index].en,
-    );
-    final state = localizedText(
-      language,
-      completed ? 'ተጠናቋል' : 'አልተጠናቀቀም',
-      completed ? 'Completed' : 'Not completed',
-    );
-    return Semantics(
-      label: '$hourName, $state',
-      child: ExcludeSemantics(
-        child: Row(
-          children: [
-            Icon(
-              completed ? Icons.check_circle : Icons.radio_button_unchecked,
-              size: 20,
-              color: completed
-                  ? colors.primary
-                  : colors.onPrimaryContainer.withValues(alpha: 0.58),
-            ),
-            const SizedBox(width: 7),
-            Expanded(
-              child: Text(
-                hourName,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodyMedium
-                    ?.copyWith(color: colors.onPrimaryContainer),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SupportingMetrics extends StatelessWidget {
-  const _SupportingMetrics({required this.summary, required this.language});
+// ─────────────────────────────────────────────────────────────────────────────
+// Quick stats – horizontal scrolling stat cards
+// ─────────────────────────────────────────────────────────────────────────────
+class _QuickStatsRow extends StatelessWidget {
+  const _QuickStatsRow({required this.summary, required this.language});
 
   final PrayerAnalysisSummary summary;
   final String language;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final metrics = [
+    final stats = [
       (
-        localizedText(language, 'የጸሎት መጠን', 'Completion rate'),
+        Icons.pie_chart_outline,
+        localizedText(language, 'የጸሎት መጠን', 'Completion'),
         _percent(summary.completionRate),
-        localizedText(
-          language,
-          '${summary.totalCompleted} ከ ${summary.totalExpected} የተጠናቀቁ',
-          '${summary.totalCompleted} completed of ${summary.totalExpected}',
-        ),
+        '${summary.totalCompleted}/${summary.totalExpected}',
       ),
       (
-        localizedText(language, 'የአሁኑ ተከታታይ ጊዜ', 'Current streak'),
+        Icons.local_fire_department_outlined,
+        localizedText(language, 'የአሁኑ ተከታታይ', 'Current Streak'),
         '${summary.currentStreak}',
         localizedText(language, 'ቀናት', 'days'),
       ),
       (
-        localizedText(language, 'ምርጥ ተከታታይ ጊዜ', 'Best streak'),
+        Icons.emoji_events_outlined,
+        localizedText(language, 'ምርጥ ተከታታይ', 'Best Streak'),
         '${summary.bestStreak}',
         localizedText(language, 'ቀናት', 'days'),
       ),
     ];
-    final stackMetrics =
-        MediaQuery.sizeOf(context).width < 1120 ||
-        MediaQuery.textScalerOf(context).scale(1) > 1.2;
-    Widget metric(int index, {required bool compact}) {
-      final label = Text(
-        metrics[index].$1,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.bodySmall
-            ?.copyWith(color: colors.onSurface.withValues(alpha: 0.76)),
-      );
-      final value = Text(
-        metrics[index].$2,
-        style: Theme.of(context).textTheme.titleMedium
-            ?.copyWith(color: colors.onSurface, fontWeight: FontWeight.w700),
-      );
-      final detail = Text(
-        metrics[index].$3,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.bodySmall,
-      );
-      if (compact) {
-        return Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [label, detail],
-              ),
+    return Row(
+      children: [
+        for (var i = 0; i < stats.length; i++) ...[
+          if (i > 0) const SizedBox(width: 10),
+          Expanded(
+            child: _StatMiniCard(
+              icon: stats[i].$1,
+              label: stats[i].$2,
+              value: stats[i].$3,
+              detail: stats[i].$4,
             ),
-            const SizedBox(width: 12),
-            value,
-          ],
-        );
-      }
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [label, const SizedBox(height: 3), value, detail],
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(
-        border: Border.symmetric(
-          horizontal: BorderSide(color: colors.outlineVariant),
-        ),
-      ),
-      child: stackMetrics
-          ? Column(
-              children: [
-                for (var index = 0; index < metrics.length; index++) ...[
-                  if (index > 0)
-                    Divider(height: 18, color: colors.outlineVariant),
-                  metric(index, compact: true),
-                ],
-              ],
-            )
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (var index = 0; index < metrics.length; index++) ...[
-                  if (index > 0)
-                    SizedBox(
-                      height: 56,
-                      child: VerticalDivider(
-                        width: 1,
-                        color: colors.outlineVariant,
-                      ),
-                    ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: metric(index, compact: false),
-                    ),
-                  ),
-                ],
-              ],
-            ),
+          ),
+        ],
+      ],
     );
   }
 }
 
-class _WeeklyChart extends StatelessWidget {
-  const _WeeklyChart({required this.summary, required this.language});
+class _StatMiniCard extends StatelessWidget {
+  const _StatMiniCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.detail,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colors.outlineVariant.withValues(alpha: 0.5),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: colors.primary.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: colors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 18, color: colors.primary),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: colors.onSurface,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colors.onSurface.withValues(alpha: 0.55),
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(height: 1),
+          Text(
+            detail,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colors.secondary,
+              fontWeight: FontWeight.w600,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Trend chart – gradient bars with rounded tops
+// ─────────────────────────────────────────────────────────────────────────────
+class _TrendChart extends StatelessWidget {
+  const _TrendChart({required this.summary, required this.language});
 
   final PrayerAnalysisSummary summary;
   final String language;
@@ -513,117 +616,68 @@ class _WeeklyChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final buckets = _chartBuckets(summary.dailyStatistics);
     final colors = Theme.of(context).colorScheme;
-    return _Panel(
-      title: localizedText(language, 'እድገት በጊዜ', 'Prayer Completion Trend'),
+    return _GlassPanel(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            children: [
+              Icon(Icons.show_chart, size: 20, color: colors.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  localizedText(
+                    language,
+                    'እድገት በጊዜ',
+                    'Prayer Completion Trend',
+                  ),
+                  style: Theme.of(context).textTheme.displaySmall,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
           Text(
             localizedText(
               language,
-              'አሞሌዎቹ በጊዜ ክፍሎች የተጠናቀቁ ጸሎቶችን መጠን ያነጻጽራሉ፤ ወርቃማው የመጨረሻውን ጊዜ ያመለክታል።',
-              'Bars compare completion rates across the selected period; gold marks the latest interval.',
+              'አሞሌዎቹ በጊዜ ክፍሎች የተጠናቀቁ ጸሎቶችን መጠን ያነጻጽራሉ',
+              'Comparing completion rates across the selected period',
             ),
             style: Theme.of(context).textTheme.bodySmall,
           ),
-          const SizedBox(height: 14),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('0%', style: Theme.of(context).textTheme.labelSmall),
-              Text('100%', style: Theme.of(context).textTheme.labelSmall),
-            ],
-          ),
           if (buckets.isNotEmpty) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               '${_shortDate(buckets.first.startDate)} – ${_shortDate(buckets.last.endDate)}',
-              style: Theme.of(context).textTheme.labelSmall
-                  ?.copyWith(color: colors.onSurface.withValues(alpha: 0.72)),
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: colors.onSurface.withValues(alpha: 0.5),
+              ),
             ),
           ],
-          const SizedBox(height: 6),
+          const SizedBox(height: 18),
           Semantics(
             label: buckets
                 .map(
-                  (bucket) =>
-                      '${_chartDateRange(bucket)}: ${bucket.completed} of ${bucket.total} prayer hours, ${_percent(bucket.rate)}',
+                  (b) =>
+                      '${_chartDateRange(b)}: ${b.completed} of ${b.total} prayer hours, ${_percent(b.rate)}',
                 )
                 .join('. '),
             child: ExcludeSemantics(
               child: SizedBox(
-                height: 154,
+                height: 160,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    for (var index = 0; index < buckets.length; index++)
+                    for (var i = 0; i < buckets.length; i++)
                       Expanded(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 2),
-                          child: Tooltip(
-                            message: localizedText(
-                              language,
-                              '${_chartDateRange(buckets[index])}\n${buckets[index].completed} / ${buckets[index].total} የጸሎት ሰዓቶች\n${_percent(buckets[index].rate)}',
-                              '${_chartDateRange(buckets[index])}\n${buckets[index].completed} / ${buckets[index].total} prayer hours\n${_percent(buckets[index].rate)} complete',
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                SizedBox(
-                                  height: 112,
-                                  child: Align(
-                                    alignment: Alignment.bottomCenter,
-                                    child: SizedBox(
-                                      width: 18,
-                                      height: 112,
-                                      child: Stack(
-                                        alignment: Alignment.bottomCenter,
-                                        children: [
-                                          Positioned.fill(
-                                            child: DecoratedBox(
-                                              decoration: BoxDecoration(
-                                                color: colors.primary
-                                                    .withValues(alpha: 0.1),
-                                                borderRadius:
-                                                    BorderRadius.circular(5),
-                                              ),
-                                            ),
-                                          ),
-                                          if (buckets[index].rate > 0)
-                                            Container(
-                                              height: 112 * buckets[index].rate,
-                                              decoration: BoxDecoration(
-                                                color:
-                                                    index == buckets.length - 1
-                                                    ? colors.secondary
-                                                    : colors.primary,
-                                                borderRadius:
-                                                    BorderRadius.circular(5),
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                SizedBox(
-                                  height: 18,
-                                  child: Text(
-                                    _chartTick(
-                                      buckets[index],
-                                      summary.rangeDays,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.clip,
-                                    textAlign: TextAlign.center,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelSmall,
-                                  ),
-                                ),
-                              ],
-                            ),
+                          child: _GradientBar(
+                            bucket: buckets[i],
+                            isLast: i == buckets.length - 1,
+                            maxHeight: 130,
+                            rangeDays: summary.rangeDays,
+                            language: language,
                           ),
                         ),
                       ),
@@ -638,42 +692,393 @@ class _WeeklyChart extends StatelessWidget {
   }
 }
 
-class _StreakCard extends StatelessWidget {
-  const _StreakCard({required this.summary, required this.language});
+class _GradientBar extends StatelessWidget {
+  const _GradientBar({
+    required this.bucket,
+    required this.isLast,
+    required this.maxHeight,
+    required this.rangeDays,
+    required this.language,
+  });
+
+  final _ChartBucket bucket;
+  final bool isLast;
+  final double maxHeight;
+  final int rangeDays;
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final barHeight = maxHeight * bucket.rate;
+    return Tooltip(
+      message: localizedText(
+        language,
+        '${_chartDateRange(bucket)}\n${bucket.completed} / ${bucket.total} የጸሎት ሰዓቶች\n${_percent(bucket.rate)}',
+        '${_chartDateRange(bucket)}\n${bucket.completed} / ${bucket.total} prayer hours\n${_percent(bucket.rate)} complete',
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          if (bucket.rate > 0)
+            Container(
+              width: 22,
+              height: barHeight.clamp(4.0, maxHeight),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(6),
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: isLast
+                      ? [AppColors.gold, AppColors.goldLight]
+                      : [colors.primary, colors.primary.withValues(alpha: 0.6)],
+                ),
+                boxShadow: isLast
+                    ? [
+                        BoxShadow(
+                          color: AppColors.gold.withValues(alpha: 0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                    : null,
+              ),
+            )
+          else
+            Container(
+              width: 22,
+              height: 4,
+              decoration: BoxDecoration(
+                color: colors.onSurface.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(6),
+              ),
+            ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 18,
+            child: Text(
+              _chartTick(bucket, rangeDays),
+              maxLines: 1,
+              overflow: TextOverflow.clip,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                fontSize: 10,
+                color: isLast
+                    ? colors.secondary
+                    : colors.onSurface.withValues(alpha: 0.5),
+                fontWeight: isLast ? FontWeight.w700 : FontWeight.w400,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Prayer-hour breakdown – modern pill progress bars
+// ─────────────────────────────────────────────────────────────────────────────
+class _HourBreakdownCard extends StatelessWidget {
+  const _HourBreakdownCard({required this.summary, required this.language});
 
   final PrayerAnalysisSummary summary;
   final String language;
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return _GlassPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.access_time_filled, size: 20, color: colors.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  localizedText(
+                    language,
+                    'የጸሎት ሰዓት እድገት',
+                    'Prayer-hour Progress',
+                  ),
+                  style: Theme.of(context).textTheme.displaySmall,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          for (
+            var i = 0;
+            i < summary.prayerPerformance.length && i < hours.length;
+            i++
+          ) ...[
+            if (i > 0) const SizedBox(height: 14),
+            _HourProgressRow(
+              index: i,
+              performance: summary.prayerPerformance[i],
+              language: language,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _HourProgressRow extends StatelessWidget {
+  const _HourProgressRow({
+    required this.index,
+    required this.performance,
+    required this.language,
+  });
+
+  final int index;
+  final PrayerPerformance performance;
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final hourName = localizedText(
+      language,
+      _prayerHourNamesAmharic[index],
+      hours[index].en,
+    );
+    final percent = _percent(performance.rate);
+    final barColor = _hourBarColor(performance.rate);
+    return Semantics(
+      label: localizedText(
+        language,
+        '$hourName፦ ${performance.completed} ከ ${performance.expected}፣ $percent',
+        '$hourName: ${performance.completed} of ${performance.expected}, $percent',
+      ),
+      child: ExcludeSemantics(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: barColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '${index + 1}',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: barColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    hourName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontFamily: language == 'eth' ? 'AbyssinicaSIL' : null,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: barColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    percent,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: barColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(5),
+              child: LinearProgressIndicator(
+                minHeight: 7,
+                value: performance.rate.clamp(0.0, 1.0),
+                color: barColor,
+                backgroundColor: colors.onSurface.withValues(alpha: 0.07),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _hourBarColor(double rate) {
+    if (rate >= 0.8) return const Color(0xFF2E7D32); // green
+    if (rate >= 0.5) return AppColors.gold;
+    if (rate >= 0.25) return AppColors.terracotta;
+    return const Color(0xFFB71C1C); // deep red
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Highlights card – milestone badge + best day + consistency
+// ─────────────────────────────────────────────────────────────────────────────
+class _HighlightsCard extends StatelessWidget {
+  const _HighlightsCard({required this.summary, required this.language});
+
+  final PrayerAnalysisSummary summary;
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final best = summary.bestDay;
     final bestText = best == null
         ? localizedText(language, 'ገና አልተመዘገበም', 'No best day yet')
         : '${_shortDate(best.date)} · ${best.completed}/7 (${_percent(best.rate)})';
-    return _Panel(
-      title: localizedText(language, 'ዋና ውጤቶች', 'Highlights'),
+
+    // Spiritual milestone
+    final hasActiveStreak = summary.currentStreak >= 3;
+    final hasHighCompletion = summary.completionRate >= 0.7;
+
+    final milestoneIcon = hasActiveStreak
+        ? Icons.workspace_premium
+        : (hasHighCompletion ? Icons.shield_outlined : Icons.auto_awesome);
+    final milestoneColor = hasActiveStreak
+        ? AppColors.gold
+        : (hasHighCompletion ? const Color(0xFF2E7D32) : colors.secondary);
+    final milestoneTitle = hasActiveStreak
+        ? localizedText(
+            language, 'ጽናት ያለው የጸሎት ጉዞ', 'Steadfast Prayer Journey')
+        : (hasHighCompletion
+            ? localizedText(language, 'ታማኝ አገልጋይ', 'Faithful Watchman')
+            : localizedText(
+                language, 'የበረከት ጅማሮ', 'Beginning of Blessing'));
+    final milestoneDesc = hasActiveStreak
+        ? localizedText(
+            language,
+            'ለ ${summary.currentStreak} ተከታታይ ቀናት የጸሎት ሰዓታትን ጠብቀዋል። በጸሎት ጽኑ!',
+            'You have maintained your canonical prayer hours for ${summary.currentStreak} consecutive days. Stay vigilant!',
+          )
+        : (hasHighCompletion
+            ? localizedText(
+                language,
+                'በዚህ ጊዜ ውስጥ አብዛኛዎቹን የጸሎት ሰዓታት አጠናቀዋል። መልካም መንፈሳዊ ትጋት!',
+                'You have completed the vast majority of your prayer hours in this period.',
+              )
+            : localizedText(
+                language,
+                '"ሳታቋርጡ ጸልዩ" (1ኛ ተሰ 5፥17)። እያንዳንዱ ሰዓት አዲስ ጸጋ አለው።',
+                '"Pray without ceasing" (1 Thess 5:17). Each hour is a new blessing.',
+              ));
+
+    return _GlassPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _Highlight(
-            icon: Icons.star_outline,
+          Row(
+            children: [
+              Icon(Icons.stars, size: 20, color: colors.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  localizedText(language, 'ዋና ውጤቶች', 'Highlights'),
+                  style: Theme.of(context).textTheme.displaySmall,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          // ── Milestone badge ──
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  milestoneColor.withValues(alpha: 0.08),
+                  milestoneColor.withValues(alpha: 0.03),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: milestoneColor.withValues(alpha: 0.2),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: milestoneColor.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(milestoneIcon, color: milestoneColor, size: 24),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        milestoneTitle,
+                        style:
+                            Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: milestoneColor,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        milestoneDesc,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          // ── Highlight rows ──
+          _HighlightRow(
+            icon: Icons.star_rounded,
+            iconColor: AppColors.gold,
             label: localizedText(language, 'ምርጥ ቀን', 'Best Day'),
             value: bestText,
           ),
-          const Divider(height: 24),
-          _Highlight(
+          const SizedBox(height: 14),
+          _HighlightRow(
             icon: Icons.trending_up,
-            label: localizedText(language, 'በጣም የተለመደ ጸሎት', 'Most Consistent'),
+            iconColor: const Color(0xFF2E7D32),
+            label: localizedText(
+                language, 'በጣም የተለመደ ጸሎት', 'Most Consistent'),
             value: _performanceLabel(
               summary,
               highest: true,
               language: language,
             ),
           ),
-          const Divider(height: 24),
-          _Highlight(
-            icon: Icons.info_outline,
-            label: localizedText(language, 'ትኩረት የሚፈልግ', 'Needs Attention'),
+          const SizedBox(height: 14),
+          _HighlightRow(
+            icon: Icons.priority_high_rounded,
+            iconColor: AppColors.terracotta,
+            label: localizedText(
+                language, 'ትኩረት የሚፈልግ', 'Needs Attention'),
             value: _performanceLabel(
               summary,
               highest: false,
@@ -686,171 +1091,69 @@ class _StreakCard extends StatelessWidget {
   }
 }
 
-class _PerformanceCard extends StatelessWidget {
-  const _PerformanceCard({required this.summary, required this.language});
-
-  final PrayerAnalysisSummary summary;
-  final String language;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return _Panel(
-      title: localizedText(language, 'የጸሎት ሰዓት እድገት', 'Prayer-hour progress'),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (
-            var index = 0;
-            index < summary.prayerPerformance.length && index < hours.length;
-            index++
-          ) ...[
-            if (index > 0) const SizedBox(height: 14),
-            Builder(
-              builder: (context) {
-                final performance = summary.prayerPerformance[index];
-                final hourName = localizedText(
-                  language,
-                  _prayerHourNamesAmharic[index],
-                  hours[index].en,
-                );
-                final percent = _percent(performance.rate);
-                return Semantics(
-                  label: localizedText(
-                    language,
-                    '$hourName፦ ${performance.completed} ከ ${performance.expected}፣ $percent',
-                    '$hourName: ${performance.completed} of ${performance.expected}, $percent',
-                  ),
-                  child: ExcludeSemantics(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                hourName,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(
-                                      fontFamily: language == 'eth'
-                                          ? 'AbyssinicaSIL'
-                                          : null,
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              localizedText(
-                                language,
-                                '${performance.completed} ከ ${performance.expected}',
-                                '${performance.completed} of ${performance.expected}',
-                              ),
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                            const SizedBox(width: 10),
-                            SizedBox(
-                              width: 42,
-                              child: Text(
-                                percent,
-                                textAlign: TextAlign.end,
-                                style: Theme.of(context).textTheme.labelLarge,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 7),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(5),
-                          child: LinearProgressIndicator(
-                            minHeight: 9,
-                            value: performance.rate.clamp(0.0, 1.0),
-                            color: colors.primary,
-                            backgroundColor: colors.onSurface.withValues(
-                              alpha: 0.1,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _Panel extends StatelessWidget {
-  const _Panel({required this.title, required this.child});
-
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.displaySmall),
-            const SizedBox(height: 16),
-            child,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Highlight extends StatelessWidget {
-  const _Highlight({
+class _HighlightRow extends StatelessWidget {
+  const _HighlightRow({
     required this.icon,
+    required this.iconColor,
     required this.label,
     required this.value,
   });
 
   final IconData icon;
+  final Color iconColor;
   final String label;
   final String value;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 20, color: colors.secondary),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: Theme.of(context).textTheme.bodyMedium),
-              const SizedBox(height: 3),
-              Text(
-                value,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: colors.onSurface,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.onSurface.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 18, color: iconColor),
           ),
-        ),
-      ],
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colors.onSurface.withValues(alpha: 0.55),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: colors.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Metania analysis
+// ─────────────────────────────────────────────────────────────────────────────
 class _MetaniaAnalysis extends StatefulWidget {
   const _MetaniaAnalysis({required this.rangeDays, required this.language});
 
@@ -903,132 +1206,169 @@ class _MetaniaAnalysisState extends State<_MetaniaAnalysis> {
     final rangeDays = widget.rangeDays;
     final language = widget.language;
     final colors = Theme.of(context).colorScheme;
-    return _Panel(
-      title: localizedText(language, 'የስግደት ትንተና', 'Metania progress'),
-      child: FutureBuilder<List<int>>(
-        future: _totalsFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 18),
-              child: Center(child: CircularProgressIndicator()),
-            );
-          }
-          final totals = snapshot.data ?? List<int>.filled(hours.length, 0);
-          final total = totals.fold<int>(0, (sum, count) => sum + count);
-          final targetPerHour = AppConstants.defaultMetaniaCount * rangeDays;
-          final totalTarget = targetPerHour * hours.length;
-          final totalProgress = totalTarget == 0
-              ? 0.0
-              : (total / totalTarget).clamp(0.0, 1.0).toDouble();
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return _GlassPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
+              Icon(
+                Icons.self_improvement,
+                size: 20,
+                color: colors.primary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  localizedText(language, 'የስግደት ትንተና', 'Metania Progress'),
+                  style: Theme.of(context).textTheme.displaySmall,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          FutureBuilder<List<int>>(
+            future: _totalsFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 18),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              final totals =
+                  snapshot.data ?? List<int>.filled(hours.length, 0);
+              final total = totals.fold<int>(0, (sum, c) => sum + c);
+              final targetPerHour =
+                  AppConstants.defaultMetaniaCount * rangeDays;
+              final totalTarget = targetPerHour * hours.length;
+              final totalProgress = totalTarget == 0
+                  ? 0.0
+                  : (total / totalTarget).clamp(0.0, 1.0).toDouble();
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.self_improvement, color: colors.secondary),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  // ── Total summary row ──
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: colors.primary.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
                       children: [
-                        Text(
-                          localizedText(language, 'ጠቅላላ ስግደት', 'Total Metania'),
-                          style: Theme.of(context).textTheme.bodyMedium,
+                        SizedBox(
+                          width: 56,
+                          height: 56,
+                          child: CustomPaint(
+                            painter: _CircularProgressPainter(
+                              progress: totalProgress,
+                              trackColor:
+                                  colors.onSurface.withValues(alpha: 0.08),
+                              progressColor: colors.primary,
+                              strokeWidth: 5,
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${(totalProgress * 100).round()}%',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: colors.primary,
+                                      fontSize: 10,
+                                    ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                localizedText(
+                                  language,
+                                  'ጠቅላላ ስግደት',
+                                  'Total Metania',
+                                ),
+                                style:
+                                    Theme.of(context).textTheme.bodyMedium,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                localizedText(
+                                  language,
+                                  'በ $rangeDays ቀን · $total / $totalTarget',
+                                  'Across $rangeDays days · $total / $totalTarget',
+                                ),
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
                         ),
                         Text(
-                          localizedText(
-                            language,
-                            'በ $rangeDays ቀን',
-                            'Across $rangeDays days',
-                          ),
-                          style: Theme.of(context).textTheme.bodySmall,
+                          '$total',
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineSmall
+                              ?.copyWith(
+                                color: colors.primary,
+                                fontWeight: FontWeight.w800,
+                              ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(height: 8),
                   Text(
-                    '$total',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: colors.onSurface,
+                    localizedText(
+                      language,
+                      'የዕያንዳንዱ ሰዓት ግብ በቀን ${AppConstants.defaultMetaniaCount} ነው።',
+                      'The existing target is ${AppConstants.defaultMetaniaCount} per prayer hour per day.',
+                    ),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    localizedText(language, 'በጸሎት ሰዓት', 'By Prayer Hour'),
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Semantics(
-                label: localizedText(
-                  language,
-                  'የግብ እድገት ${(totalProgress * 100).round()} በመቶ፣ $total ከ $totalTarget',
-                  'Metania goal progress ${_percent(totalProgress)}, $total of $totalTarget',
-                ),
-                child: ExcludeSemantics(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(5),
-                    child: LinearProgressIndicator(
-                      value: totalProgress,
-                      minHeight: 9,
-                      color: colors.primary,
-                      backgroundColor: colors.onSurface.withValues(alpha: 0.1),
-                    ),
+                  const SizedBox(height: 14),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final columns = constraints.maxWidth >= 720 ? 2 : 1;
+                      const gap = 20.0;
+                      final width = columns == 1
+                          ? constraints.maxWidth
+                          : (constraints.maxWidth - gap) / columns;
+                      return Wrap(
+                        spacing: gap,
+                        runSpacing: 14,
+                        children: [
+                          for (var i = 0; i < hours.length; i++)
+                            SizedBox(
+                              width: width,
+                              child: _MetaniaHourRow(
+                                index: i,
+                                count: totals[i],
+                                target: targetPerHour,
+                                language: language,
+                              ),
+                            ),
+                        ],
+                      );
+                    },
                   ),
-                ),
-              ),
-              const SizedBox(height: 7),
-              Text(
-                localizedText(
-                  language,
-                  'የግብ እድገት: ${(totalProgress * 100).round()}%  ·  $total / $totalTarget',
-                  'Goal progress: ${(totalProgress * 100).round()}%  ·  $total / $totalTarget',
-                ),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                localizedText(
-                  language,
-                  'የዕያንዳንዱ ሰዓት ግብ በቀን ${AppConstants.defaultMetaniaCount} ነው።',
-                  'The existing target is ${AppConstants.defaultMetaniaCount} per prayer hour per day.',
-                ),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 20),
-              Text(
-                localizedText(language, 'በጸሎት ሰዓት', 'By Prayer Hour'),
-                style: Theme.of(context).textTheme.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 14),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final columns = constraints.maxWidth >= 720 ? 2 : 1;
-                  const gap = 20.0;
-                  final width = columns == 1
-                      ? constraints.maxWidth
-                      : (constraints.maxWidth - gap) / columns;
-                  return Wrap(
-                    spacing: gap,
-                    runSpacing: 16,
-                    children: [
-                      for (var index = 0; index < hours.length; index++)
-                        SizedBox(
-                          width: width,
-                          child: _MetaniaHourRow(
-                            index: index,
-                            count: totals[index],
-                            target: targetPerHour,
-                            language: language,
-                          ),
-                        ),
-                    ],
-                  );
-                },
-              ),
-            ],
-          );
-        },
+                ],
+              );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -1055,9 +1395,8 @@ class _MetaniaHourRow extends StatelessWidget {
       _prayerHourNamesAmharic[index],
       hours[index].en,
     );
-    final progress = target == 0
-        ? 0.0
-        : (count / target).clamp(0.0, 1.0).toDouble();
+    final progress =
+        target == 0 ? 0.0 : (count / target).clamp(0.0, 1.0).toDouble();
     return Semantics(
       label: localizedText(
         language,
@@ -1065,38 +1404,65 @@ class _MetaniaHourRow extends StatelessWidget {
         '$hourName: $count of $target',
       ),
       child: ExcludeSemantics(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: Row(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    hourName,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontFamily: language == 'eth' ? 'AbyssinicaSIL' : null,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: colors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(7),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                '${index + 1}',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: colors.primary,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          hourName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(
+                                fontFamily:
+                                    language == 'eth' ? 'AbyssinicaSIL' : null,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ),
+                      Text(
+                        '$count / $target',
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 6,
+                      color: colors.primary,
+                      backgroundColor:
+                          colors.onSurface.withValues(alpha: 0.07),
                     ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  '$count / $target',
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
-              ],
-            ),
-            const SizedBox(height: 7),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(5),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 8,
-                color: colors.primary,
-                backgroundColor: colors.onSurface.withValues(alpha: 0.1),
+                ],
               ),
             ),
           ],
@@ -1106,6 +1472,90 @@ class _MetaniaHourRow extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared widgets
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Glass-style panel with subtle elevation and border
+class _GlassPanel extends StatelessWidget {
+  const _GlassPanel({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: colors.outlineVariant.withValues(alpha: 0.45),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: colors.primary.withValues(alpha: 0.03),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+/// Circular arc progress painter
+class _CircularProgressPainter extends CustomPainter {
+  const _CircularProgressPainter({
+    required this.progress,
+    required this.trackColor,
+    required this.progressColor,
+    required this.strokeWidth,
+  });
+
+  final double progress;
+  final Color trackColor;
+  final Color progressColor;
+  final double strokeWidth;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (math.min(size.width, size.height) - strokeWidth) / 2;
+    final trackPaint = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+    final progressPaint = Paint()
+      ..color = progressColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawCircle(center, radius, trackPaint);
+    final sweepAngle = 2 * math.pi * progress.clamp(0.0, 1.0);
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -math.pi / 2,
+      sweepAngle,
+      false,
+      progressPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _CircularProgressPainter oldDelegate) =>
+      oldDelegate.progress != progress ||
+      oldDelegate.progressColor != progressColor ||
+      oldDelegate.trackColor != trackColor;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
 String _percent(double rate) => '${(rate * 100).round()}%';
 
 String _shortDate(DateTime date) => '${date.month}/${date.day}';
@@ -1162,8 +1612,8 @@ _ChartBucket _makeChartBucket(List<DailyPrayerStatistic> days) => _ChartBucket(
 
 String _chartDateRange(_ChartBucket bucket) =>
     bucket.startDate == bucket.endDate
-    ? _shortDate(bucket.startDate)
-    : '${_shortDate(bucket.startDate)}–${_shortDate(bucket.endDate)}';
+        ? _shortDate(bucket.startDate)
+        : '${_shortDate(bucket.startDate)}–${_shortDate(bucket.endDate)}';
 
 String _chartTick(_ChartBucket bucket, int rangeDays) {
   if (rangeDays <= 14) return '${bucket.startDate.day}';

@@ -537,6 +537,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                   }
                 },
                 items: PrayerReminderOffset.values
+                    .where(
+                      (offset) =>
+                          offset == PrayerReminderOffset.atPrayerTime ||
+                          offset == PrayerReminderOffset.fiveMinutes,
+                    )
                     .map(
                       (offset) => DropdownMenuItem(
                         value: offset,
@@ -608,44 +613,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                 ? (_) => settings.toggleReminder(index)
                 : null,
           ),
-          const SizedBox(height: 4),
-          DropdownButtonFormField<PrayerReminderOffset?>(
-            initialValue: settings.prayerReminderOverrides[index],
-            isExpanded: true,
-            decoration: InputDecoration(
-              labelText: localizedText(
-                settings.language,
-                'የማሳሰቢያ ጊዜ',
-                'Reminder',
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 12,
-              ),
-            ),
-            items: [
-              DropdownMenuItem<PrayerReminderOffset?>(
-                value: null,
-                child: Text(
-                  localizedText(
-                    settings.language,
-                    'እንደ ነባሪ ተጠቀም',
-                    'Use default',
-                  ),
-                ),
-              ),
-              ...PrayerReminderOffset.values.map(
-                (offset) => DropdownMenuItem<PrayerReminderOffset?>(
-                  value: offset,
-                  child: Text(offset.label(settings.language)),
-                ),
-              ),
-            ],
-            onChanged: (offset) {
-              settings.setPrayerReminderOffset(index, offset);
-            },
-          ),
-          const SizedBox(height: 8),
         ],
       ],
     );

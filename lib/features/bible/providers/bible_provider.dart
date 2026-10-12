@@ -3,9 +3,11 @@ import 'package:rise_for_prayer/features/bible/models/bible_models.dart';
 import 'package:rise_for_prayer/features/bible/repositories/bible_repository.dart';
 
 class BibleProvider extends ChangeNotifier {
-  BibleProvider({BibleRepository? repository})
+  BibleProvider({BibleRepository? repository, bool autoLoad = false})
     : _repository = repository ?? const BibleRepository() {
-    loadBooks();
+    if (autoLoad) {
+      loadBooks();
+    }
   }
 
   final BibleRepository _repository;
@@ -29,7 +31,13 @@ class BibleProvider extends ChangeNotifier {
     BibleLanguage language = BibleLanguage.both,
   }) => _passageErrors[_passageKey(reference, language)];
 
-  Future<void> loadBooks() async {
+  Future<void>? _loadBooksFuture;
+
+  Future<void> loadBooks() {
+    return _loadBooksFuture ??= _doLoadBooks();
+  }
+
+  Future<void> _doLoadBooks() async {
     _loading = true;
     notifyListeners();
     try {
@@ -37,8 +45,11 @@ class BibleProvider extends ChangeNotifier {
       _error = null;
     } on BibleSourceException catch (error) {
       _error = error.message;
+    } catch (error) {
+      _error = error.toString();
     } finally {
       _loading = false;
+      _loadBooksFuture = null;
       notifyListeners();
     }
   }

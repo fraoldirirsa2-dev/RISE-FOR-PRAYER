@@ -44,30 +44,55 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Scaffold(
       backgroundColor: background,
       body: _screens[_selectedIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: background,
-        selectedItemColor: colors.primary,
-        unselectedItemColor: colors.onSurface.withValues(alpha: 0.68),
-        currentIndex: _selectedIndex,
-        onTap: (index) => setState(() => _selectedIndex = index),
-        items: [
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.schedule_outlined),
-            label: label('Hours', 'ሰዓታት'),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: background,
+          border: Border(
+            top: BorderSide(
+              color: colors.outlineVariant.withValues(alpha: 0.35),
+              width: 0.8,
+            ),
           ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.bar_chart_outlined),
-            label: label('Analysis', 'ትንተና'),
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.calendar_month_outlined),
-            label: label('Calendar', 'የቀን መቁጠሪያ'),
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.settings_outlined),
-            label: label('Settings', 'ቅንብሮች'),
-          ),
-        ],
+          boxShadow: [
+            BoxShadow(
+              color: colors.shadow.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, -3),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          selectedItemColor: colors.primary,
+          unselectedItemColor: colors.onSurface.withValues(alpha: 0.60),
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
+          currentIndex: _selectedIndex,
+          onTap: (index) => setState(() => _selectedIndex = index),
+          items: [
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.schedule_outlined),
+              activeIcon: const Icon(Icons.schedule),
+              label: label('Hours', 'ሰዓታት'),
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.bar_chart_outlined),
+              activeIcon: const Icon(Icons.bar_chart),
+              label: label('Analysis', 'ትንተና'),
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.calendar_month_outlined),
+              activeIcon: const Icon(Icons.calendar_month),
+              label: label('Calendar', 'የቀን መቁጠሪያ'),
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.settings_outlined),
+              activeIcon: const Icon(Icons.settings),
+              label: label('Settings', 'ቅንብሮች'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -289,20 +314,40 @@ class _HomeTabState extends ConsumerState<_HomeTab>
       startsTomorrow ? 'Tomorrow' : 'Today',
     );
     final countdown = timeService.nextPrayerCountdown;
+    final isLight = Theme.of(context).brightness == Brightness.light;
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: colors.surface,
-        border: Border.all(color: colors.primary.withValues(alpha: 0.18)),
+        borderRadius: BorderRadius.circular(22),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isLight
+              ? [
+                  colors.surface,
+                  colors.surface,
+                  colors.primary.withValues(alpha: 0.04),
+                ]
+              : [
+                  colors.surface,
+                  Color.alphaBlend(
+                    colors.primary.withValues(alpha: 0.12),
+                    colors.surface,
+                  ),
+                ],
+        ),
+        border: Border.all(
+          color: colors.primary.withValues(alpha: isLight ? 0.22 : 0.35),
+          width: 1.2,
+        ),
         boxShadow: [
           BoxShadow(
-            color: colors.primary.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: colors.primary.withValues(alpha: isLight ? 0.08 : 0.18),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
       child: Column(
         children: [
           Text(
@@ -520,13 +565,15 @@ class _HomeTabState extends ConsumerState<_HomeTab>
           else if (scripture.passage != null) ...[
             Text(
               language == 'en'
-                  ? scripture.passage!.verses.every(
-                          (verse) => verse.englishText != null,
+                  ? scripture.passage!.verses.any(
+                          (verse) => verse.englishText != null && verse.englishText!.trim().isNotEmpty,
                         )
                         ? scripture.passage!.verses
-                              .map((verse) => verse.englishText!)
+                              .map((verse) => verse.englishText ?? verse.amharicText)
                               .join('\n')
-                        : 'English text is unavailable for this passage.'
+                        : scripture.passage!.verses
+                              .map((verse) => verse.amharicText)
+                              .join('\n')
                   : scripture.passage!.verses
                         .map((verse) => verse.amharicText)
                         .join('\n'),
@@ -591,30 +638,48 @@ class _HomeTabState extends ConsumerState<_HomeTab>
       PrayerStatus.missed => localizedText(language, 'ያመለጠ', 'MISSED'),
     };
 
-    return Column(
-      children: [
-        Material(
-          color: current
-              ? colors.primary.withValues(alpha: 0.08)
-              : done
-              ? colors.secondary.withValues(alpha: 0.05)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(8),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => RuleSessionScreen(
-                  day: DateTime.now().weekday - 1,
-                  hour: hour.id,
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 3),
+      decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: current
+                ? Border.all(
+                    color: colors.primary.withValues(alpha: 0.55),
+                    width: 1.5,
+                  )
+                : Border.all(color: Colors.transparent),
+            boxShadow: current
+                ? [
+                    BoxShadow(
+                      color: colors.primary.withValues(alpha: 0.12),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Material(
+            color: current
+                ? colors.primary.withValues(alpha: 0.10)
+                : done
+                ? colors.secondary.withValues(alpha: 0.06)
+                : colors.surface.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(14),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => RuleSessionScreen(
+                    day: DateTime.now().weekday - 1,
+                    hour: hour.id,
+                  ),
                 ),
               ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-              child: Row(
-                children: [
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+                child: Row(
+                  children: [
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -664,14 +729,7 @@ class _HomeTabState extends ConsumerState<_HomeTab>
             ),
           ),
         ),
-        Divider(
-          height: 1,
-          indent: 14,
-          endIndent: 14,
-          color: colors.outlineVariant.withValues(alpha: 0.55),
-        ),
-      ],
-    );
+      );
   }
 }
 

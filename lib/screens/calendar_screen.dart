@@ -538,7 +538,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               ?.copyWith(color: colors.onSurface, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 8),
-        if (hasObservance)
+        if (hasObservance) ...[
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -558,8 +558,66 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   Icons.schedule_outlined,
                 ),
             ],
-          )
-        else
+          ),
+          if (observance.isFast) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.terracotta.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.terracotta.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.restaurant_outlined,
+                    size: 20,
+                    color: AppColors.terracotta,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          localizedText(
+                            language,
+                            date.weekday == DateTime.saturday ||
+                                    date.weekday == DateTime.sunday
+                                ? 'የጾም ሰዓት፡ እስከ ቅዳሴ ፍጻሜ (ዘይት ይፈቀዳል)'
+                                : 'የጾም ሰዓት፡ እስከ 9:00 ሰዓት (3:00 PM)',
+                            date.weekday == DateTime.saturday ||
+                                    date.weekday == DateTime.sunday
+                                ? 'Fast duration: Until end of Liturgy (oil permitted)'
+                                : 'Fast duration: Until 9th hour (3:00 PM)',
+                          ),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: colors.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          localizedText(
+                            language,
+                            'ከሥጋ፣ ወተት፣ ቅቤና እንቁላል መታቀብ',
+                            'Abstain from meat, dairy, butter, and eggs',
+                          ),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: colors.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ] else
           Text(
             localizedText(
               language,

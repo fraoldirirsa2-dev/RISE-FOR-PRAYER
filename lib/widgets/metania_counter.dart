@@ -28,16 +28,20 @@ class MetaniaCounter extends ConsumerStatefulWidget {
 
 class _MetaniaCounterState extends ConsumerState<MetaniaCounter> {
   int _count = 0;
+  int _goal = AppConstants.defaultMetaniaCount;
   bool _loaded = false;
   bool _isAutoCounting = false;
   Timer? _autoTimer;
   late final String _storageKey;
+  late final String _goalStorageKey;
 
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
     _storageKey = 'metania_${now.year}-${now.month}-${now.day}_${widget.prayerHourId}';
+    _goalStorageKey = 'metania_goal_${widget.prayerHourId}';
+    _goal = widget.initialCount;
     _loadCount();
   }
 
@@ -46,23 +50,41 @@ class _MetaniaCounterState extends ConsumerState<MetaniaCounter> {
     if (!mounted) return;
     setState(() {
       _count = preferences.getInt(_storageKey) ?? 0;
+      _goal = preferences.getInt(_goalStorageKey) ?? widget.initialCount;
       _loaded = true;
     });
   }
 
+  Future<void> _setGoal(int newGoal) async {
+    if (!widget.enabled) return;
+    setState(() => _goal = newGoal);
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setInt(_goalStorageKey, newGoal);
+    if (_count > newGoal) {
+      await _setCount(newGoal);
+    }
+  }
+
   Future<void> _setCount(int value) async {
     if (!widget.enabled) return;
-    final next = value.clamp(0, widget.initialCount).toInt();
+    final next = value.clamp(0, _goal).toInt();
     setState(() => _count = next);
     final preferences = await SharedPreferences.getInstance();
     await preferences.setInt(_storageKey, next);
   }
 
   Future<void> _increment({bool haptic = true}) async {
-    if (!widget.enabled || !_loaded || _count >= widget.initialCount) return;
-    if (haptic) await HapticFeedback.selectionClick();
+    if (!widget.enabled || !_loaded || _count >= _goal) return;
+    final reachedGoal = _count + 1 >= _goal;
+    if (haptic) {
+      if (reachedGoal) {
+        await HapticFeedback.heavyImpact();
+      } else {
+        await HapticFeedback.selectionClick();
+      }
+    }
     await _setCount(_count + 1);
-    if (_count >= widget.initialCount) _stopAutoCount();
+    if (_count >= _goal) _stopAutoCount();
   }
 
   void _startAutoCount() {
@@ -132,10 +154,10 @@ class _MetaniaCounterState extends ConsumerState<MetaniaCounter> {
     final language = ref.watch(settingsProvider).language;
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final progress = widget.initialCount <= 0
+    final progress = _goal <= 0
         ? 0.0
-        : (_count / widget.initialCount).clamp(0.0, 1.0).toDouble();
-    final complete = _count >= widget.initialCount;
+        : (_count / _goal).clamp(0.0, 1.0).toDouble();
+    final complete = _count >= _goal;
     final locked = !widget.enabled;
     final title = localizedText(language, 'ስግደት', 'Metania');
     final hint = localizedText(
@@ -187,82 +209,94 @@ class _MetaniaCounterState extends ConsumerState<MetaniaCounter> {
               ),
             ],
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            children: [
+              for (final preset in [12, 41, 100])
+                ChoiceChip(
+                  label: Text('$preset ${localizedText(language, 'ስግደት', 'bows')}'),
+                  selected: _goal == preset,
+                  onSelected: locked ? null : (_) => _setGoal(preset),
+                ),
+            ],
+          ),
+          const SizedBox(height: 18),
           Column(
             children: [
               Semantics(
-                    button: true,
-                    label: '$title, $_count / ${widget.initialCount}',
-                    hint: hint,
-                    child: GestureDetector(
-                    onTap: locked || !_loaded || complete ? null : _increment,
-                      child: SizedBox(
-                        width: 156,
-                        height: 156,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            SizedBox.expand(
-                              child: CircularProgressIndicator(
-                                value: progress,
-                                strokeWidth: 8,
-                                strokeCap: StrokeCap.round,
-                                backgroundColor:
-                                    colors.primary.withValues(alpha: 0.12),
-                              ),
-                            ),
-                            AnimatedContainer(
-                              duration: const Duration(milliseconds: 220),
-                              width: 138,
-                              height: 138,
-                              decoration: BoxDecoration(
-                                color: complete
-                                    ? colors.primary.withValues(alpha: 0.12)
-                                    : colors.primary,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 160),
-                                    transitionBuilder: (child, animation) =>
-                                        ScaleTransition(
-                                          scale: animation,
-                                          child: child,
-                                        ),
-                                    child: Text(
-                                      _loaded ? '$_count' : '—',
-                                      key: ValueKey(_count),
-                                      style: GoogleFonts.inter(
-                                        fontSize: 42,
-                                        fontWeight: FontWeight.w700,
-                                        color: complete
-                                            ? colors.primary
-                                            : colors.onPrimary,
-                                      ),
-                                    ),
-                                  ),
-                                  Text(
-                                    complete
-                                        ? localizedText(language, 'ጨርሰዋል', 'Goal reached')
-                                        : localizedText(language, 'ከ ${widget.initialCount}', 'of ${widget.initialCount}'),
-                                    style: theme.textTheme.labelMedium?.copyWith(
-                                      color: complete
-                                          ? colors.primary
-                                          : colors.onPrimary.withValues(
-                                              alpha: 0.82,
-                                            ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                button: true,
+                label: '$title, $_count / $_goal',
+                hint: hint,
+                child: GestureDetector(
+                  onTap: locked || !_loaded || complete ? null : _increment,
+                  child: SizedBox(
+                    width: 156,
+                    height: 156,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        SizedBox.expand(
+                          child: CircularProgressIndicator(
+                            value: progress,
+                            strokeWidth: 8,
+                            strokeCap: StrokeCap.round,
+                            backgroundColor:
+                                colors.primary.withValues(alpha: 0.12),
+                          ),
                         ),
-                      ),
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 220),
+                          width: 138,
+                          height: 138,
+                          decoration: BoxDecoration(
+                            color: complete
+                                ? colors.primary.withValues(alpha: 0.12)
+                                : colors.primary,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 160),
+                                transitionBuilder: (child, animation) =>
+                                    ScaleTransition(
+                                      scale: animation,
+                                      child: child,
+                                    ),
+                                child: Text(
+                                  _loaded ? '$_count' : '—',
+                                  key: ValueKey(_count),
+                                  style: GoogleFonts.inter(
+                                    fontSize: 42,
+                                    fontWeight: FontWeight.w700,
+                                    color: complete
+                                        ? colors.primary
+                                        : colors.onPrimary,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                complete
+                                    ? localizedText(language, 'ጨርሰዋል', 'Goal reached')
+                                    : localizedText(language, 'ከ $_goal', 'of $_goal'),
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: complete
+                                      ? colors.primary
+                                      : colors.onPrimary.withValues(
+                                          alpha: 0.82,
+                                        ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                ),
+              ),
               const SizedBox(height: 10),
               TextButton.icon(
                 onPressed: locked || !_loaded || _count == 0
@@ -283,8 +317,8 @@ class _MetaniaCounterState extends ConsumerState<MetaniaCounter> {
                     ? localizedText(language, 'የዚህ ሰዓት ግብ ተሟልቷል', 'Prayer hour goal complete')
                     : localizedText(
                         language,
-                        'ቀሪ: ${widget.initialCount - _count}',
-                        '${widget.initialCount - _count} remaining',
+                        'ቀሪ: ${_goal - _count}',
+                        '${_goal - _count} remaining',
                       ),
             style: theme.textTheme.bodyMedium?.copyWith(
               color: complete ? colors.primary : colors.onSurfaceVariant,

@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rise_for_prayer/features/prayer_hours/data/canonical_prayer_hours.dart';
 import 'package:rise_for_prayer/features/prayer_hours/domain/prayer_schedule.dart';
+import 'package:rise_for_prayer/data/prayer_data.dart';
+import 'package:rise_for_prayer/data/prayer_reminders.dart';
 
 void main() {
   const schedule = PrayerSchedule(canonicalPrayerHours);
@@ -28,6 +30,19 @@ void main() {
     expect(morning.hour, 6);
   });
 
+  test('keeps displayed, scheduled, and reminder Vespers at 5:00 PM', () {
+    final vespers = canonicalPrayerHours.firstWhere(
+      (hour) => hour.prayerId == 'vespers',
+    );
+
+    expect(hours[4].ge, 'ሠርክ');
+    expect(hours[4].time, '5:00 PM');
+    expect(vespers.titleAmharic, 'ሠርክ');
+    expect(vespers.hour, 17);
+    expect(prayerReminders[4].amharicTitle, 'ሠርክ');
+    expect(prayerReminders[4].hour, 17);
+  });
+
   test('follows the clock for current and next prayer throughout the day', () {
     final expectations = <DateTime, List<String>>{
       DateTime(2026, 9, 12, 0, 0): ['midnight', 'morning'],
@@ -40,6 +55,8 @@ void main() {
       DateTime(2026, 9, 12, 12, 0): ['sixth', 'ninth'],
       DateTime(2026, 9, 12, 13, 30): ['sixth', 'ninth'],
       DateTime(2026, 9, 12, 15, 0): ['ninth', 'vespers'],
+      DateTime(2026, 9, 12, 16, 59): ['ninth', 'vespers'],
+      DateTime(2026, 9, 12, 17, 0): ['vespers', 'compline'],
       DateTime(2026, 9, 12, 18, 0): ['vespers', 'compline'],
       DateTime(2026, 9, 12, 19, 30): ['vespers', 'compline'],
       DateTime(2026, 9, 12, 21, 0): ['compline', 'midnight'],

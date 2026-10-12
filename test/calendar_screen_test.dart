@@ -13,7 +13,7 @@ void main() {
   testWidgets(
     'standalone Calendar opens and supports mode and Today controls',
     (tester) async {
-      SharedPreferences.setMockInitialValues({});
+      SharedPreferences.setMockInitialValues({'language': 'en'});
 
       await tester.pumpWidget(
         ProviderScope(
@@ -29,11 +29,11 @@ void main() {
       expect(find.byType(CalendarScreen), findsOneWidget);
       expect(find.byTooltip('Today'), findsOneWidget);
       expect(find.text('Gregorian'), findsOneWidget);
-      expect(find.text('Ethiopic'), findsOneWidget);
+      expect(find.text('Ethiopian'), findsOneWidget);
 
-      await tester.tap(find.text('Ethiopic'));
+      await tester.tap(find.text('Ethiopian'));
       await tester.pump();
-      expect(find.text('Ethiopic'), findsOneWidget);
+      expect(find.text('Ethiopian'), findsOneWidget);
 
       await tester.tap(find.byTooltip('Today'));
       await tester.pump();
