@@ -1,6 +1,6 @@
 name: rise_for_prayer
 description: Ethiopian Orthodox Tewahedo daily prayer app
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ^3.13.0
